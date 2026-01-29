@@ -4,6 +4,9 @@ Share whiteboard, camera video, screen and recorded videos and audios with other
   <img alt="Preview" height="354" src="/preview.png" width="640"/>
 </p>
 
+<h2>Demo</h2>
+https://conference.neverwasinparis.com/
+
 <h2>Installation</h2>
 
 <b>1. Upload files to your server</b>
