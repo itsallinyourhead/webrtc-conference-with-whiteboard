@@ -1,0 +1,1275 @@
+@font-face {
+  font-display: block;
+  font-family: 'Dancing Script';
+  font-style: normal;
+  font-weight: 400;
+  src: url('/fonts/DancingScript-Regular.woff2') format('woff2');
+}
+@font-face {
+  font-display: block;
+  font-family: 'Dosis';
+  font-style: normal;
+  font-weight: 400;
+  src: url('/fonts/Dosis-Regular.woff2') format('woff2');
+}
+@font-face {
+  font-display: block;
+  font-family: 'Indie Flower';
+  font-style: normal;
+  font-weight: 400;
+  src: url('/fonts/IndieFlower-Regular.woff2') format('woff2');
+}
+@font-face {
+  font-display: block;
+  font-family: Pacifico;
+  font-style: normal;
+  font-weight: 400;
+  src: url('/fonts/Pacifico.woff2') format('woff2');
+}
+@font-face {
+  font-display: block;
+  font-family: Poppins;
+  font-style: normal;
+  font-weight: 400;
+  src: url('/fonts/Poppins-Regular.woff2') format('woff2');
+}
+body {
+  background-color: #f3f6fc;
+  font-family: sans-serif;
+  margin: 0;
+  overflow: hidden scroll;
+  padding: 0;
+  position: relative;
+  text-align: center;
+  user-select: none;
+  width: 100%;
+  z-index: 10;
+}
+button,
+input {
+  font-size: 1rem;
+  margin-inline: 10px;
+  padding: 10px;
+}
+button:not([disabled]),
+input:not([disabled]) {
+  cursor: pointer;
+}
+button > p,
+button > svg {
+  pointer-events: none;
+}
+#chatAll {
+  background-color: #fff;
+  position: absolute;
+  right: 0;
+  transition: width .2s linear;
+}
+#chatAll.chatAllExpanded {
+  width: 500px;
+}
+#chatAll,
+#chatAllDummy {
+  border: #000 1px solid;
+  border-radius: 10px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  padding: 5px;
+  width: 100%;
+}
+#chatAllDummy {
+  position: relative;
+  right: 500px;
+}
+#chatNew::placeholder {
+  font-style: italic;
+}
+#chatNew:focus::placeholder {
+  color: transparent;
+}
+#chatNew,
+#chatNewDummy {
+  border-radius: 10px;
+  font-size: 18px;
+  line-height: 1;
+  padding: 5px 20px 5px 10px;
+  width: 100%;
+}
+#chatNewOuter,
+#chatNewOuterDummy {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+#chatNewOuter > button {
+  appearance: none;
+  background-color: unset;
+  border: none;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+  position: absolute;
+  top: 6.5px;
+}
+#chatOld,
+#chatOldDummy {
+  overflow-y: auto;
+  width: 100%;
+}
+#chatOld > textarea,
+#chatOldDummy > textarea {
+  color: #fff;
+  display: block;
+  margin-bottom: 5px;
+  padding: 5px;
+  width: 100%;
+}
+#chatOld > textarea:last-child,
+#chatOldDummy > textarea:last-child {
+  margin-bottom: 0 !important;
+}
+#chatOldOuter,
+#chatOldOuterDummy {
+  display: flex;
+  flex-direction: column;
+  height: 200px;
+  justify-content: flex-end;
+  margin: 0 0 5px 0;
+  scroll-behavior: smooth;
+}
+.chatOldOwn {
+  background-color: #008ecf;
+  border-radius: 10px 10px 0 10px;
+}
+.chatOldPartner {
+  background-color: #44ac69;
+  border-radius: 10px 10px 10px 0;
+  text-align: right;
+}
+#chatOuter {
+  position: relative;
+  z-index: 15;
+}
+#chatSendMessage {
+  right: 6.5px;
+}
+#content {
+  align-self: stretch;
+  display: flex;
+  flex: 1 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+#createMeeting,
+#inviteCopy,
+#inviteLink,
+#inviteQR img {
+  margin-top: 10px;
+}
+.familyArial {
+  font-family: arial;
+}
+.familyCursive {
+  font-family: cursive, arial;
+}
+.familyDancingScript {
+  font-family: 'dancing script', arial;
+}
+.familyDosis {
+  font-family: dosis, arial;
+}
+.familyIndieFlower {
+  font-family: 'indie flower', arial;
+}
+.familyMonospace {
+  font-family: monospace, arial;
+}
+.familyPacifico {
+  font-family: pacifico, arial;
+}
+.familyPoppins {
+  font-family: poppins, arial;
+}
+.familySerif {
+  font-family: serif, arial;
+}
+.familySystemUI {
+  font-family: system-ui, arial;
+}
+#galleryBackground,
+#galleryBackgroundBeta {
+  align-items: center;
+  backdrop-filter: blur(16px);
+  display: flex;
+  height: 100%;
+  justify-content: center;
+  left: 0;
+  position: fixed;
+  top: 0;
+  width: 100%;
+  z-index: 1000;
+}
+#galleryClose {
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: block;
+  height: var(--closeHeight);
+  margin: 0;
+  padding: 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: var(--closeHeight);
+}
+#galleryClose::after,
+#galleryClose::before {
+  background-color: #ddd;
+  border-radius: 2px;
+  content: '';
+  height: 4px;
+  left: 14px;
+  position: absolute;
+  top: 26px;
+  transform-origin: center;
+  width: 28px;
+}
+#galleryClose::after {
+  transform: rotate(-45deg);
+}
+#galleryClose::before {
+  transform: rotate(45deg);
+}
+#galleryClose:focus {
+  outline: none;
+}
+#galleryClose:hover::after,
+#galleryClose:hover::before,
+#galleryClose:focus::after,
+#galleryClose:focus::before {
+  background-color: #000;
+}
+#galleryInner {
+  display: flex;
+  gap: 10px;
+}
+#galleryOuter {
+  --marginTop: 10px;
+  --outerPadding: 10px;
+  background-color: #fff;
+  border-radius: 10px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, .5);
+  box-sizing: border-box;
+  margin: var(--marginTop) 0;
+  max-height: calc(100vh - var(--marginTop) * 2);
+  max-width: 100%;
+  overflow-y: auto;
+  padding: var(--outerPadding);
+  position: relative;
+}
+.galleryThumbnail,
+#navOptionsAudioRecordingStart,
+.navOptionsVideoRecordingThumbnail,
+#navOptionsVideoRecordingStart,
+#navOptionsWhiteboardRecordingStart,
+.navOptionsWhiteboardRecordingThumbnail {
+  align-items: center;
+  background-size: cover;
+  border: none;
+  border-radius: 5px;
+  display: flex;
+  font-size: 14px;
+  margin: 0;
+  max-width: 100%;
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+}
+.galleryThumbnail,
+#navOptionsVideoRecordingStart,
+.navOptionsVideoRecordingThumbnail,
+#navOptionsWhiteboardRecordingStart,
+.navOptionsWhiteboardRecordingThumbnail {
+  aspect-ratio: 16 / 9;
+  justify-content: center;
+  padding: 0;
+}
+.galleryThumbnail:hover:not([disabled]),
+.galleryThumbnail:focus:not([disabled]) {
+  opacity: .7;
+}
+#galleryThumbnails {
+  display: inline-grid;
+  gap: 10px;
+  height: fit-content;
+  outline: none;
+  vertical-align: top;
+  width: 20%;
+}
+#galleryTitle {
+  align-items: center;
+  display: flex;
+  height: var(--closeHeight);
+  justify-content: center;
+  left: var(--closeHeight);
+  margin: 0;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  text-wrap: nowrap;
+  width: calc(100% - var(--closeHeight) * 2);
+}
+#galleryTop {
+  --closeHeight: 56px;
+  height: 56px;
+  margin-top: calc(-1 * var(--outerPadding));
+}
+#galleryVideo {
+  border-radius: 10px;
+  display: flex;
+  max-width: 100%;
+}
+#galleryVideoOuter {
+  display: inline-block;
+  width: 80%;
+}
+.generalRecycleBin {
+  border: none;
+  margin: 0;
+}
+.generalRecycleBinToTop {
+  background: none;
+  padding: 0 0 0 10px;
+  position: absolute;
+  transform: translateY(-22px);
+}
+.gridChildren4 > button:nth-of-type(1) ,
+.gridChildren6 > button:nth-of-type(1) {
+  grid-column: 1;
+  grid-row: 1;
+}
+.gridChildren4 > button:nth-of-type(2) {
+  grid-column: 2;
+  grid-row: 1;
+}
+.gridChildren4 > button:nth-of-type(3) {
+  grid-column: 1;
+  grid-row: 2;
+}
+.gridChildren4 > button:nth-of-type(4) {
+  grid-column: 2;
+  grid-row: 2;
+}
+.gridChildren6 > button:nth-of-type(2) {
+  grid-column: 2;
+  grid-row: 1;
+}
+.gridChildren6 > button:nth-of-type(3) {
+  grid-column: 3;
+  grid-row: 1;
+}
+.gridChildren6 > button:nth-of-type(4) {
+  grid-column: 1;
+  grid-row: 2;
+}
+.gridChildren6 > button:nth-of-type(5) {
+  grid-column: 2;
+  grid-row: 2;
+}
+.gridChildren6 > button:nth-of-type(6) {
+  grid-column: 3;
+  grid-row: 2;
+}
+.gridRows2 {
+  grid-auto-flow: column; 
+  grid-template-rows: repeat(2, auto);
+}
+.hidden {
+  visibility: hidden !important;
+}
+.hideBelow {
+  margin-top: 5000px;
+}
+#inviteLink {
+  box-sizing: border-box;
+  margin-inline: 0;
+  width: 100%;
+}
+main {
+  display: flex;
+  gap: 5px;
+  padding: 0 5px 5px 5px;
+  width: calc(100% - 10px);
+}
+#media {
+  flex: 0 1 200px;
+  width: 200px;
+}
+@media screen and (max-width: 799.98px) {
+  #chatAll.chatAllExpanded {
+    max-width: 100%;
+    width: 100%;
+  }
+  #content {
+    display: grid;
+  }
+  main {
+    display: block;
+    gap: unset;
+  }
+  #media {
+    margin-top: 5px;
+    width: 100%;
+  }
+}
+@media screen and (min-width: 800px) {
+  #media {
+    margin-top: -103px;
+  }
+  #top {
+    width: calc(100% - 215px);
+  }
+}
+#nav {
+  text-align: left;
+}
+#nav fieldset {
+  border-radius: 10px;
+  display: inline-block;
+  padding: 5px;
+  text-align: left;
+  vertical-align: top;
+}
+.navActiveOptionsConnector {
+  position: relative;
+}
+.navActiveOptionsConnector path,
+.navActiveOptionsConnector svg,
+.navActiveOptionsInner {
+  pointer-events: auto;
+}
+.navActiveOptionsConnector svg {
+  fill: #cdcdcd;
+  vertical-align: top;
+}
+.navActiveOptionsInner {
+  background-color: #cdcdcd;
+  border-radius: var(--activeOptionsBorderRadius);
+  overflow: hidden;
+  position: relative;
+  top: -.5px;
+}
+.navActiveOptionsOuter {
+  --activeOptionsBorderRadius: 5px;
+  --navActiveOptionsConnectorHeight: 10px;
+  --navActiveOptionsConnectorWidth: 18px;
+  height: 0;
+  max-width: 100%;
+  overflow: hidden;
+  pointer-events: none;
+  position: absolute;
+}
+#navActiveOptionsOuter-navOptionsAudioRecording {
+  --activeOptionsPadding: 10px;
+  max-width: 320px;
+}
+#navActiveOptionsOuter-navOptionsAudioRecording,
+#navActiveOptionsOuter-navOptionsVideoRecording,
+#navActiveOptionsOuter-navOptionsWhiteboardRecording {
+  background: linear-gradient(to bottom, transparent calc(var(--activeOptionsBorderRadius) + var(--navActiveOptionsConnectorHeight)), #0c4d7f calc(var(--activeOptionsBorderRadius) + var(--navActiveOptionsConnectorHeight)));
+  border-radius: var(--activeOptionsBorderRadius);
+}
+#navActiveOptionsOuter-navOptionsVideoRecording,
+#navActiveOptionsOuter-navOptionsWhiteboardRecording {
+  --activeOptionsColumnWidth: 170px;
+  --activeOptionsGap: 10px;
+  --activeOptionsPadding: 10px;
+  max-width: 50%;
+}
+#navActiveOptionsOuter-navOptionsVideoRecording:has(.hasMedia),
+#navActiveOptionsOuter-navOptionsWhiteboardRecording:has(.hasMedia) {
+  max-width: min(100%, 2 * var(--activeOptionsColumnWidth) + var(--activeOptionsGap) + 2 * var(--activeOptionsPadding));
+}
+.navArrow {
+  color: #000;
+}
+.navButton {
+  align-items: center;
+  border-radius: 5px;
+  display: flex;
+  height: 30px;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  width: 30px;
+}
+.navButton2 {
+  width: 65px !important;
+}
+.navButton3 {
+  width: 100px !important;
+}
+.navDrawColorPicker,
+.navTextColorPicker {
+  background: conic-gradient(from 90deg, rgba(255, 0, 0, 1) 0deg, rgba(224, 161, 25, 1) 79.6154deg, rgba(93, 203, 42, 1) 133.269deg, rgba(61, 180, 146, 1) 192.115deg, rgba(0, 85, 214, 1) 249.231deg, rgba(45, 9, 247, 1) 290.769deg, rgba(229, 6, 188, 1) 320.192deg, rgba(255, 0, 0, 1) 360deg);
+  height: 100%;
+}
+#navDrawColorPickerColor-0,
+#navTextColorPickerColor-0 {
+  background-color: #ff0000;
+}
+#navDrawColorPickerColor-1,
+#navTextColorPickerColor-1 {
+  background-color: #800000;
+}
+#navDrawColorPickerColor-2,
+#navTextColorPickerColor-2 {
+  background-color: #ff0066;
+}
+#navDrawColorPickerColor-3,
+#navTextColorPickerColor-3 {
+  background-color: #ff66ff;
+}
+#navDrawColorPickerColor-4,
+#navTextColorPickerColor-4 {
+  background-color: #6600cc;
+}
+#navDrawColorPickerColor-5,
+#navTextColorPickerColor-5 {
+  background-color: #0000ff;
+}
+#navDrawColorPickerColor-6,
+#navTextColorPickerColor-6 {
+  background-color: #0099ff;
+}
+#navDrawColorPickerColor-7,
+#navTextColorPickerColor-7 {
+  background-color: #00ffff;
+}
+#navDrawColorPickerColor-8,
+#navTextColorPickerColor-8 {
+  background-color: #009999;
+}
+#navDrawColorPickerColor-9,
+#navTextColorPickerColor-9 {
+  background-color: #3333cc;
+}
+#navDrawColorPickerColor-10,
+#navTextColorPickerColor-10 {
+  background-color: #00ff00;
+}
+#navDrawColorPickerColor-11,
+#navTextColorPickerColor-11 {
+  background-color: #006600;
+}
+#navDrawColorPickerColor-12,
+#navTextColorPickerColor-12 {
+  background-color: #003300;
+}
+#navDrawColorPickerColor-13,
+#navTextColorPickerColor-13 {
+  background-color: #339933;
+}
+#navDrawColorPickerColor-14,
+#navTextColorPickerColor-14 {
+  background-color: #669900;
+}
+#navDrawColorPickerColor-15,
+#navTextColorPickerColor-15 {
+  background-color: #ffff00;
+}
+#navDrawColorPickerColor-16,
+#navTextColorPickerColor-16 {
+  background-color: #ffcc00;
+}
+#navDrawColorPickerColor-17,
+#navTextColorPickerColor-17 {
+  background-color: #ffff99;
+}
+#navDrawColorPickerColor-18,
+#navTextColorPickerColor-18 {
+  background-color: #ff7f2a;
+}
+#navDrawColorPickerColor-19,
+#navTextColorPickerColor-19 {
+  background-color: #ff3300;
+}
+#navDrawColorPickerColor-20,
+#navTextColorPickerColor-20 {
+  background-color: #000000;
+}
+#navDrawColorPickerColor-21,
+#navTextColorPickerColor-21 {
+  background-color: #ffffff;
+}
+#navDrawColorPickerColor-22,
+#navTextColorPickerColor-22 {
+  background-color: #a9a9a9;
+}
+#navDrawColorPickerColor-23,
+#navTextColorPickerColor-23 {
+  background-color: #4f2700;
+}
+#navDrawColorPickerColor-24,
+#navTextColorPickerColor-24 {
+  background-color: #996633;
+}
+.navDrawColorPickerColorActive,
+.navTextColorPickerColorActive {
+  outline: 2px dotted #585858;
+}
+#navDrawColorPickerColorOuter,
+#navTextColorPickerColorOuter {
+  display: grid;
+  gap: 7px;
+  grid-auto-flow: row; 
+  grid-template-columns: repeat(5, auto);
+  padding: 5px;
+}
+#navDrawColorPickerColorOuter > button,
+#navTextColorPickerColorOuter > button {
+  border: none;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+  width: 16px;
+}
+#navDrawColorPickerColorOuter > button:hover,
+#navTextColorPickerColorOuter > button:hover,
+#wbControlBack:hover:not([disabled]),
+#wbControlForward:hover:not([disabled]) {
+  opacity: .7;
+}
+#navDrawLineWidthOuter {
+  padding: 10px;
+}
+#navDrawLineWidthRangeWrap {
+  --thumb-size: 11px;
+  --track-width: 115px;
+  height: 11px;
+  position: relative;
+  width: calc(var(--track-width) + var(--thumb-size));
+}
+#navDrawLineWidthSlider {
+  appearance: none;
+  background: transparent;
+  height: 100%;
+  left: 0;
+  margin: 0;
+  padding: 0;
+  position: absolute;
+  top: 0;
+  width: calc(var(--thumb-size) + var(--track-width));
+}
+#navDrawLineWidthSlider::-moz-range-thumb {
+  appearance: none;
+  background: #008ecf;
+  border: none;
+  border-radius: 50%;
+  height: var(--thumb-size);
+  width: var(--thumb-size);
+}
+#navDrawLineWidthSlider::-webkit-slider-thumb {
+  appearance: none;
+  background: #008ecf;
+  border: none;
+  border-radius: 50%;
+  height: var(--thumb-size);
+  width: var(--thumb-size);
+}
+#navDrawLineWidthSlider::-moz-range-track {
+  background: transparent;
+  height: 100%;
+}
+#navDrawLineWidthSlider::-webkit-slider-runnable-track {
+  background: transparent;
+  height: 100%;
+}
+#navDrawLineWidthTrack {
+  clip-path: polygon(0 50%, 100% 0%, 100% 100%, 0% 50%);
+  height: 100%;
+  left: calc(var(--thumb-size) / 2);
+  pointer-events: none;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: var(--track-width);
+}
+.navFieldsetInner {
+  display: grid;
+  gap: 5px;
+}
+#navInsertImageSelectOuter,
+#navInsertPDFSelectOuter {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+}
+#navInsertImageSelectOuter > button,
+#navInsertPDFSelectOuter > button {
+  background: none;
+  border: none;
+  margin: 0;
+  padding: 0;
+  text-decoration: underline;
+}
+#navInsertImageSelectOuter > button:focus:not([disabled]),
+#navInsertImageSelectOuter > button:hover:not([disabled]),
+#navInsertPDFSelectOuter > button:focus:not([disabled]),
+#navInsertPDFSelectOuter > button:hover:not([disabled]),
+#navOptionsAudioRecordingActiveOptions div > button:focus:not([disabled]),
+#navOptionsAudioRecordingActiveOptions div > button:hover:not([disabled]),
+#navOptionsAudioRecordingActiveOptions > div > input:hover:not(:focus):not([disabled]),
+#navOptionsVideoRecordingActiveOptions div > button:focus:not([disabled]),
+#navOptionsVideoRecordingActiveOptions div > button:hover:not([disabled]),
+#navOptionsVideoRecordingActiveOptions > div > input:hover:not(:focus):not([disabled]),
+#navOptionsWhiteboardRecordingActiveOptions div > button:focus:not([disabled]),
+#navOptionsWhiteboardRecordingActiveOptions div > button:hover:not([disabled]),
+#navOptionsWhiteboardRecordingActiveOptions > div > input:hover:not(:focus):not([disabled]) {
+  opacity: .7;
+}
+#navOptionsAudioRecordingActiveOptions {
+  --outerHeight: 30px;
+}
+#navOptionsAudioRecordingActiveOptions,
+#navOptionsVideoRecordingActiveOptions,
+#navOptionsWhiteboardRecordingActiveOptions {
+  background-color: #0c4d7f;
+  max-height: 450px;
+  overflow-y: auto;
+  padding: var(--activeOptionsPadding);
+}
+#navOptionsAudioRecordingActiveOptions > div:not(:last-child) {
+  margin-bottom: 10px;
+}
+#navOptionsAudioRecordingActiveOptions > div,
+#navOptionsVideoRecordingActiveOptions > div,
+#navOptionsWhiteboardRecordingActiveOptions > div {
+  position: relative;
+}
+#navOptionsAudioRecordingActiveOptions > div > input,
+#navOptionsVideoRecordingActiveOptions > div > input,
+#navOptionsWhiteboardRecordingActiveOptions > div > input {
+  background: none;
+  border: none;
+  box-sizing: border-box;
+  color: #fff;
+  display: block;
+  font-size: 14px;
+  margin: 0;
+  max-width: 100%;
+  padding: 5px;
+}
+#navOptionsAudioRecordingActiveOptions audio {
+  border-radius: calc(var(--outerHeight) / 2);
+  max-width: calc(100% - var(--outerHeight));
+  width: 270px;
+}
+#navOptionsAudioRecordingActiveOptions button {
+  border: none;
+  border-radius: calc(var(--outerHeight) / 2);
+  height: var(--outerHeight);
+  margin: 0;
+  padding: 0;
+}
+#navOptionsAudioRecordingActiveOptions button:not(#navOptionsAudioRecordingStart) {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  width: var(--outerHeight);
+}
+#navOptionsAudioRecordingActiveOptions input {
+  max-width: 100%;
+  width: 300px;
+}
+#navOptionsAudioRecordingActiveOptions input,
+#navOptionsVideoRecordingActiveOptions input,
+#navOptionsWhiteboardRecordingActiveOptions input {
+  margin-bottom: 2px !important;
+}
+.navOptionsAudioRecordingPlaybackOuter {
+  display: flex;
+  height: var(--outerHeight);
+  justify-content: center;
+}
+.navOptionsAudioRecordingPlaybackOuter > audio {
+  height: var(--outerHeight);
+}
+.navOptionsAudioRecordingPlaybackOuter > input:disabled {
+  cursor: not-allowed;
+}
+#navOptionsAudioRecordingStart {
+  --diameter: 20px;
+}
+#navOptionsAudioRecordingStart,
+#navOptionsVideoRecordingPause,
+#navOptionsVideoRecordingStart,
+#navOptionsVideoRecordingStop,
+#navOptionsWhiteboardRecordingStart {
+  background-color: #fff;
+}
+#navOptionsAudioRecordingStart::before {
+  background-color: #bc002d;
+  border-radius: 50%;
+  content: '';
+  height: var(--diameter);
+  margin: 5px;
+  position: absolute;
+  width: var(--diameter);
+}
+#navOptionsAudioRecordingStart > * {
+  margin: 5px;
+  pointer-events: none;
+}
+#navOptionsAudioRecordingStart > p {
+  height: var(--diameter);
+  width: var(--diameter);
+}
+#navOptionsAudioRecordingStartSpinnerInner {
+  display: flex;
+  justify-content: center;
+  width: calc(100% - var(--outerHeight));
+}
+#navOptionsAudioRecordingStartSpinnerOuter,
+#navOptionsAudioRecordingStopInner {
+  display: flex;
+}
+#navOptionsAudioRecordingVolume {
+  height: var(--outerHeight);
+  width: calc(100% - 3 * var(--outerHeight));
+}
+#navOptionsVideoRecordingActiveOptions.hasMedia,
+#navOptionsWhiteboardRecordingActiveOptions.hasMedia {
+  display: grid;
+  gap: var(--activeOptionsGap);
+  grid-auto-flow: row;
+  grid-template-columns: repeat(2, calc(50% - var(--activeOptionsGap) / 2));
+}
+#navOptionsVideoRecordingActiveOptions > div,
+#navOptionsWhiteboardRecordingActiveOptions > div {
+  max-width: var(--activeOptionsColumnWidth);
+  text-align: left;
+}
+#navOptionsVideoRecordingStart::before,
+#navOptionsWhiteboardRecordingStart::before {
+  background-color: #bc002d;
+  border-radius: 50%;
+  content: '';
+  height: 20px;
+  position: absolute;
+  width: 20px;
+}
+#navOptionsVideoRecordingStart > p,
+#navOptionsWhiteboardRecordingStart > p {
+  margin: 50px 0 0 0;
+  pointer-events: none;
+}
+#navOptionsVideoRecordingPause {
+  float: right;
+}
+#navOptionsVideoRecordingPause,
+#navOptionsVideoRecordingStop {
+  align-items: center;
+  aspect-ratio: 15 / 9;
+  border: none;
+  border-radius: 5px;
+  display: flex;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  vertical-align: top;
+  width: calc(50% - 5px);
+}
+#navOptionsVideoRecordingStop {
+  float: left;
+}
+#navOptionsWhiteboardRecordingStopInner {
+  aspect-ratio: 4 / 3;
+}
+#navText > div > button:nth-of-type(2) {
+  grid-row: 2;
+}
+#navText > div > button:nth-of-type(3) {
+  grid-column: 3;
+  grid-row: 2;
+}
+#navTextFamily {
+  --svgWidth: 20px;
+  font-size: 14px;
+  padding: 5px;
+}
+#navTextFamily.navActiveButton:not(:hover),
+#navTextSize.navActiveButton:not(:hover) > span {
+  color: #fff;
+}
+.navTextFamilyButton {
+  background-color: #cdcdcd;
+  border: none;
+  display: block;
+  font-size: 16px;
+  margin: 0;
+  width: 100%;
+}
+.navTextFamilyButton:active,
+.navTextFamilyButton:focus,
+.navTextFamilyButton:hover,
+.navTextFamilyButtonActive {
+  background-color: #c0c0c0;
+}
+#navTextSize > * {
+  pointer-events: none;
+  width: 50%;
+}
+#navTextSizeCurrent {
+  margin-top: 2px;
+}
+#navTextSizeInput {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0 5px 0 0;
+  text-align: center;
+  width: 90px;
+}
+#navTextSizeOuter {
+  padding: 5px;
+}
+#navVideo {
+  background-color: #0c4d7f;
+  display: inline-flex;
+  vertical-align: top;
+}
+#navVideo,
+#navWhiteboard {
+  align-items: self-start;
+  border-radius: 10px;
+  gap: 5px;
+  padding: 0 3px 3px 3px;
+  width: max-content;
+}
+#navVideo > fieldset {
+  border: #fff 1px solid;
+}
+#navVideo > fieldset > legend {
+  color: #fff;
+}
+#navVideo .navButton {
+  background-color: #0c4d7f;
+  border: #fff 1px solid;
+  color: #fff;
+}
+#navVideo .navButtonRecording {
+  animation: navButtonRecording 3s infinite;
+  border: #fff 1px solid;
+  color: #fff;
+}
+@keyframes navButtonRecording {
+    0%, 100% {border-color:    #fff; color:    #fff;}
+   50%       {border-color: #bc002d; color: #bc002d;}
+}
+#navVideoCamera > svg:nth-child(1) {
+  left: 6px;
+  position: relative;
+  top: 1px;
+}
+#navVideoDevices {
+  display: grid;
+  gap: 4px;
+  padding-top: 3px;
+}
+#navVideoDevices > button {
+  align-items: center;
+  background-color: #f3f6fc;
+  border: #000 1px solid;
+  border-radius: 10px;
+  display: flex;
+  height: 28px;
+  margin: 0;
+  padding: 0;
+  position: relative;
+  width: 45px;
+}
+#navVideoDevices > button[disabled] > svg {
+  color: #c0c0c0 !important;
+}
+#navVideo button.navButton:focus,
+#navVideo button.navButton:hover:not([disabled]),
+#navVideoDevices > button:focus,
+#navVideoDevices > button:hover:not([disabled]),
+#navWhiteboard button.navButton:focus,
+#navWhiteboard button.navButton:hover:not([disabled]) {
+  background-color: #b3ddf1 !important;
+  outline: none;
+}
+#navVideo button.navActiveButton,
+#navWhiteboard button.navActiveButton {
+  background-color: #008ecf;
+  outline: none;
+}
+#navVideoDevices > button > svg:nth-child(2) {
+  position: absolute;
+  right: 6px;
+  top: 17px;
+}
+.navVideoHangUp {
+  color: #f92a2e;
+}
+#navVideoHangUp > svg:nth-child(1) {
+  left: 6px;
+  position: relative;
+}
+#navVideoMicrophone > svg:nth-child(1) {
+  left: 8px;
+  position: relative;
+}
+#navWhiteboard {
+  display: contents;
+  opacity: 0;
+  transition: opacity .2s linear;
+}
+#navWhiteboard button.navActiveButton:not(:focus):not(:hover) > svg > .svgColorWB,
+#navWhiteboard button.navActiveButton:not(:focus):not(:hover) > .svgColorWB {
+  color: #fff;
+}
+#navWhiteboard button.navActiveButton:not(:focus):not(:hover) > svg > .svgFillVideo,
+#navWhiteboard button.navActiveButton:not(:focus):not(:hover) > .svgFillVideo {
+  fill: #000;
+}
+#navWhiteboard button.navActiveButton:not(:focus):not(:hover) > svg > .svgFillWB,
+#navWhiteboard button.navActiveButton:not(:focus):not(:hover) > .svgFillWB {
+  fill: #fff;
+}
+#navWhiteboard > fieldset {
+  border: #0c4d7f 1px solid;
+}
+#navWhiteboard > fieldset > div > button {
+  background-color: #f3f6fc;
+  border: #000 1px solid;
+}
+#navWhiteboard legend {
+  color: #0c4d7f;
+}
+#navWhiteboard svg {
+  color: #000;
+}
+#navWhiteboard.show {
+  opacity: 1;
+}
+.none {
+  display: none !important;
+}
+#notificationsOuter {
+  --margin: 15px;
+  bottom: var(--margin);
+  box-sizing: border-box;
+  display: grid;
+  gap: var(--margin);
+  grid-template-columns: minmax(0, 1fr);
+  left: var(--margin);
+  max-height: calc(100% - var(--margin));
+  max-width: 320px;
+  overflow: hidden;
+  pointer-events: none;
+  position: fixed;
+  z-index: 105;
+}
+#notificationsOuter > div {
+  background-color: #cdcdcd;
+  border: 2px solid #000;
+  border-radius: 10px;
+  box-sizing: border-box;
+  font-size: 14px;
+  hyphens: auto;
+  justify-self: end;
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: break-word;
+  padding: 10px;
+  pointer-events: auto;
+}
+.pointer {
+  cursor: pointer;
+}
+.selected {
+  outline: 3px solid red;
+}
+.span2 {
+  grid-column: span 2;
+}
+.span3 {
+  grid-column: span 3;
+}
+.spinner {
+  animation: spinnerSmall 1s linear infinite;
+  border-radius: 50%;
+  border-right: 3px solid transparent;
+  border-top: 3px solid #7cb5ec;
+  box-sizing: border-box;
+  display: inline-block;
+  height: var(--height);
+  width: var(--height);
+}
+.spinnerSmall {
+  --height: 30px;
+}
+.spinnerTiny {
+  --height: 20px;
+}
+@keyframes spinnerSmall {
+    0% {transform: rotate(  0deg);}
+  100% {transform: rotate(360deg);}
+} 
+.svgColorWB {
+  color: #000;
+}
+.svgFillVideo {
+  fill: #fff;
+}
+.svgFillWB {
+  fill: #000;
+}
+textarea {
+  box-sizing: border-box;
+  height: auto;
+  overflow: hidden;
+  resize: none;
+  white-space: break-spaces;
+}
+#top {
+  padding: 5px;
+}
+#videoLocal {
+  transform: scaleX(-1);
+}
+#videoLocal,
+#videoRemote {
+  border-radius: 10px;
+  display: block;
+  width: 100%;
+}
+#videoLocalOuter {
+  border-radius: 10px;
+  height: 0;
+  overflow: hidden;
+}
+#videoOthersOuter > video {
+  margin-bottom: 5px;
+}
+#videoRemoteOuter,
+#wbInner {
+  border-radius: 10px;
+}
+#wbControl {
+  display: flex;
+  height: 20px;
+}
+#wbControlBack,
+#wbControlForward {
+  background: none;
+  border: none;
+  height: 100%;
+  margin: 0;
+  padding: 0 5px;
+}
+#wbControlLeft {
+  text-align: left;
+  width: 80px;
+}
+#wbControlLeft > button[disabled] > svg {
+  fill: #c0c0c0 !important;
+}
+#wbControlMiddle {
+  text-align: center;
+  width: calc(100% - 200px);
+}
+#wbControlRight {
+  text-align: right;
+  width: 120px;
+}
+#whiteboard {
+  cursor: crosshair;
+  display: block;
+  height: 100%;
+  touch-action: none; /* Prevents browser from claiming touch for scrolling/zooming */
+  width: 100%;
+}
+.whiteboardImg {
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  height: 100%;
+}
+#wbContextMenu {
+  background-color: rgb(0, 0, 0, .6);
+  border-radius: 12px;
+  position: absolute;
+  width: 230px;
+  z-index: 15;
+}
+#wbContextMenu > button {
+  --svgWidth: 30px;
+  align-content: center;
+  background: none;
+  border: none;
+  color: #fff;
+  display: flex;
+  flex-wrap: wrap;
+  height: 35px;
+  margin: 0;
+  padding: 5px 0;
+  width: 100%;
+}
+#wbContextMenu > button:disabled {
+  color: #c0c0c0;
+  cursor: not-allowed;
+}
+#wbContextMenu > button:hover {
+  background-color: rgb(255, 255, 255, .1);
+}
+#wbContextMenu > button > div {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+}
+#wbContextMenu > button > div,
+#wbContextMenu > button > svg {
+  width: var(--svgWidth);
+}
+#wbContextMenu > button > p {
+  margin: 0;
+  text-align: left;
+  width: calc(100% - 2 * var(--svgWidth));
+}
+#wbContextMenu .svgColor {
+  color: #fff;
+}
+#wbContextMenu .svgFill {
+  fill: #fff;
+}
+#wbInner {
+  background-color: #fff;
+  border: 1px solid #000;
+  flex: 1;
+  min-height: 550px;
+  overflow: hidden;
+  position: relative;
+  z-index: 5;
+}
+#wbOuter {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+#wbPartnerCursor {
+  pointer-events: none; /* Prevents flickering when partner hovers mirrored cursor */
+  position: absolute;
+}
+.wbTextInput {
+  background: none;
+  border: 1px solid blue;
+  display: block;
+  outline: none;
+  padding: 5px;
+  position: absolute;
+  resize: none;
+  z-index: 6;
+}
