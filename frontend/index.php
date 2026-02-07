@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta content="initial-scale=1, width=device-width" name="viewport">
   <title>Conference</title>
-  <link href="/css/index.css" rel="stylesheet">
+  <link href="/css/index.css?v=1" rel="stylesheet">
   <link href="/css/modal.css" rel="stylesheet">
 </head>
 <body>
@@ -292,6 +292,6 @@
   <div id="notificationsOuter"></div>
   <script defer src="/js/html2canvas.min.js"></script>
   <script defer src="/js/qrCodeGenerator.js"></script>
-  <script defer src="/js/index.js"></script>
+  <script defer src="/js/index.js?v=1"></script>
 </body>
 </html>
