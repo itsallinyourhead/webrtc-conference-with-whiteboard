@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta content="initial-scale=1, width=device-width" name="viewport">
-  <title>WebRTC</title>
+  <title>Conference</title>
   <link href="/css/index.css" rel="stylesheet">
   <link href="/css/modal.css" rel="stylesheet">
 </head>
@@ -215,24 +215,33 @@
         <video autoplay id="videoRemote" playsinline></video>
       </div>
       <div id="wbOuter">
-        <div id="wbControl">
-          <div id="wbControlLeft">
-            <button data-i18n="back" id="wbControlBack">
+        <div id="wbControlOld">
+          <div id="wbControlOldLeft">
+            <button data-i18n="back" id="wbControlOldBack">
               <svg class="svgFillWB" height="12" viewBox="0 0 16 12" width="16" xmlns="http://www.w3.org/2000/svg">
                 <path d="M1.1539 4.65661L0.576946 5.23356L0 4.65661L0.576946 4.07966L1.1539 4.65661ZM15.0247 11.1841C15.0247 11.6347 14.6594 12 14.2088 12C13.7582 12 13.3929 11.6347 13.3929 11.1841H15.0247ZM4.6566 9.31322L0.576946 5.23356L1.73085 4.07966L5.81051 8.15933L4.6566 9.31322ZM0.576946 4.07966L4.6566 0L5.81051 1.15391L1.73085 5.23356L0.576946 4.07966ZM1.1539 3.84068H9.31322V5.47255H1.1539V3.84068ZM15.0247 9.5522V11.1841H13.3929V9.5522H15.0247ZM9.31322 3.84068C12.4676 3.84068 15.0247 6.39781 15.0247 9.5522H13.3929C13.3929 7.29909 11.5663 5.47255 9.31322 5.47255V3.84068Z" fill-rule="evenodd" stroke="currentColor"/>
               </svg>
             </button>
-            <button data-i18n="forward" id="wbControlForward">
+            <button data-i18n="forward" id="wbControlOldForward">
               <svg class="svgFillWB" height="12" viewBox="0 0 16 12" width="16" xmlns="http://www.w3.org/2000/svg">
                 <path d="M14.0063 4.65661L14.5832 5.23356L15.1602 4.65661L14.5832 4.07966L14.0063 4.65661ZM0.135415 11.1841C0.135415 11.6347 0.500708 12 0.951347 12C1.40199 12 1.76728 11.6347 1.76728 11.1841H0.135415ZM10.5036 9.31322L14.5832 5.23356L13.4293 4.07966L9.34964 8.15933L10.5036 9.31322ZM14.5832 4.07966L10.5036 0L9.34964 1.15391L13.4293 5.23356L14.5832 4.07966ZM14.0063 3.84068H5.84694V5.47255H14.0063V3.84068ZM0.135415 9.5522V11.1841H1.76728V9.5522H0.135415ZM5.84694 3.84068C2.69254 3.84068 0.135415 6.39781 0.135415 9.5522H1.76728C1.76728 7.29909 3.59382 5.47255 5.84694 5.47255V3.84068Z" fill-rule="evenodd" stroke="currentColor"/>
               </svg>
             </button>
           </div>
-          <div id="wbControlMiddle"></div>
-          <div id="wbControlRight"></div>
+          <div id="wbControlOldMiddle"></div>
+          <div id="wbControlOldRight"></div>
         </div>
         <div id="wbInner">
           <canvas id="whiteboard"></canvas>
+          <div id="wbControlOuter">
+            <div id="wbControl">
+              <button id="wbControlGrab">
+                <svg class="svgColorWB" fill="currentColor" height="26" preserveAspectRatio="xMidYMid meet" version="1.1" viewBox="0 0 36 30" width="20" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M31.46,8.57A3.11,3.11,0,0,0,27,5.75a3.19,3.19,0,0,0-4.66-2.64,3.29,3.29,0,0,0-6.42-.76,3.23,3.23,0,0,0-1.66-.46A3.27,3.27,0,0,0,11,5.18V17.84c-1.28-1.6-2.53-3.18-2.72-3.45A3.19,3.19,0,0,0,5.56,12.9a3.37,3.37,0,0,0-3.47,3.48C2.18,18.18,5.66,24.54,8,28c3.54,5.24,6.92,6,7.07,6l.18,0H25.59a.92.92,0,0,0,.55-.19,13.13,13.13,0,0,0,3.75-6.13c1-3.09,1.53-7.53,1.58-13.56ZM28.18,27.12a12.46,12.46,0,0,1-2.94,5.08H15.33c-.47-.14-3.07-1.1-5.87-5.25S3.94,17.27,3.89,16.29a1.5,1.5,0,0,1,.45-1.13,1.52,1.52,0,0,1,1.14-.46,1.43,1.43,0,0,1,1.32.71c.29.43,2.36,3,3.57,4.53L12.8,18.3V5.18a1.48,1.48,0,1,1,2.95,0V16.32h1.8v-13a1.51,1.51,0,0,1,3,0V16.45h1.8V6a1.43,1.43,0,1,1,2.85,0V17.44H27V8.54a1.33,1.33,0,0,1,2.65,0v5.55C29.62,20,29.14,24.21,28.18,27.12Z"/>
+                </svg>
+              </button>
+            </div>
+          </div>
           <svg class="none" height="16" id="wbPartnerCursor" preserveAspectRatio="xMidYMid meet" viewBox="0 0 43 65" width="16" xmlns="http://www.w3.org/2000/svg">
             <path d="M0.96714 2.36699 L0.98128 59.18699 L14.40714 46.41300 L20.94994 62.61699 L28.92624 59.39649 L22.38344 43.19249 L40.89244 43.08251 Z" fill="red" stroke="black" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"/>
           </svg>
