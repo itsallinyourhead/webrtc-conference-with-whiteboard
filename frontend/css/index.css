@@ -55,8 +55,7 @@ button:not([disabled]),
 input:not([disabled]) {
   cursor: pointer;
 }
-button > p,
-button > svg {
+button > * {
   pointer-events: none;
 }
 #chatAll {
@@ -85,7 +84,7 @@ button > svg {
 #chatNew::placeholder {
   font-style: italic;
 }
-#chatNew:focus::placeholder {
+#chatNew:focus-visible::placeholder {
   color: transparent;
 }
 #chatNew,
@@ -241,13 +240,13 @@ button > svg {
 #galleryClose::before {
   transform: rotate(45deg);
 }
-#galleryClose:focus {
+#galleryClose:focus-visible {
   outline: none;
 }
 #galleryClose:hover::after,
 #galleryClose:hover::before,
-#galleryClose:focus::after,
-#galleryClose:focus::before {
+#galleryClose:focus-visible::after,
+#galleryClose:focus-visible::before {
   background-color: #000;
 }
 #galleryInner {
@@ -296,7 +295,7 @@ button > svg {
   padding: 0;
 }
 .galleryThumbnail:hover:not([disabled]),
-.galleryThumbnail:focus:not([disabled]) {
+.galleryThumbnail:focus-visible:not([disabled]) {
   opacity: .7;
 }
 #galleryThumbnails {
@@ -637,8 +636,8 @@ main {
 }
 #navDrawColorPickerColorOuter > button:hover,
 #navTextColorPickerColorOuter > button:hover,
-#wbControlBack:hover:not([disabled]),
-#wbControlForward:hover:not([disabled]) {
+#wbControlOldBack:hover:not([disabled]),
+#wbControlOldForward:hover:not([disabled]) {
   opacity: .7;
 }
 #navDrawLineWidthOuter {
@@ -714,19 +713,19 @@ main {
   padding: 0;
   text-decoration: underline;
 }
-#navInsertImageSelectOuter > button:focus:not([disabled]),
+#navInsertImageSelectOuter > button:focus-visible:not([disabled]),
 #navInsertImageSelectOuter > button:hover:not([disabled]),
-#navInsertPDFSelectOuter > button:focus:not([disabled]),
+#navInsertPDFSelectOuter > button:focus-visible:not([disabled]),
 #navInsertPDFSelectOuter > button:hover:not([disabled]),
-#navOptionsAudioRecordingActiveOptions div > button:focus:not([disabled]),
+#navOptionsAudioRecordingActiveOptions div > button:focus-visible:not([disabled]),
 #navOptionsAudioRecordingActiveOptions div > button:hover:not([disabled]),
-#navOptionsAudioRecordingActiveOptions > div > input:hover:not(:focus):not([disabled]),
-#navOptionsVideoRecordingActiveOptions div > button:focus:not([disabled]),
+#navOptionsAudioRecordingActiveOptions > div > input:hover:not(:focus-visible):not([disabled]),
+#navOptionsVideoRecordingActiveOptions div > button:focus-visible:not([disabled]),
 #navOptionsVideoRecordingActiveOptions div > button:hover:not([disabled]),
-#navOptionsVideoRecordingActiveOptions > div > input:hover:not(:focus):not([disabled]),
-#navOptionsWhiteboardRecordingActiveOptions div > button:focus:not([disabled]),
+#navOptionsVideoRecordingActiveOptions > div > input:hover:not(:focus-visible):not([disabled]),
+#navOptionsWhiteboardRecordingActiveOptions div > button:focus-visible:not([disabled]),
 #navOptionsWhiteboardRecordingActiveOptions div > button:hover:not([disabled]),
-#navOptionsWhiteboardRecordingActiveOptions > div > input:hover:not(:focus):not([disabled]) {
+#navOptionsWhiteboardRecordingActiveOptions > div > input:hover:not(:focus-visible):not([disabled]) {
   opacity: .7;
 }
 #navOptionsAudioRecordingActiveOptions {
@@ -912,13 +911,12 @@ main {
   width: 100%;
 }
 .navTextFamilyButton:active,
-.navTextFamilyButton:focus,
+.navTextFamilyButton:focus-visible,
 .navTextFamilyButton:hover,
 .navTextFamilyButtonActive {
   background-color: #c0c0c0;
 }
 #navTextSize > * {
-  pointer-events: none;
   width: 50%;
 }
 #navTextSizeCurrent {
@@ -992,20 +990,22 @@ main {
 #navVideoDevices > button[disabled] > svg {
   color: #c0c0c0 !important;
 }
-#navVideo button.navButton:focus,
-#navVideo button.navButton:hover:not([disabled]),
-#navVideoDevices > button:focus,
-#navVideoDevices > button:hover:not([disabled]),
-#navWhiteboard button.navButton:focus,
-#navWhiteboard button.navButton:hover:not([disabled]) {
+#navVideo button.navButton:focus-visible,
+#navVideoDevices > button:focus-visible,
+#navWhiteboard button.navButton:focus-visible {
   background-color: #b3ddf1 !important;
   outline: none;
 }
 #navVideo button.navActiveButton,
 #navWhiteboard button.navActiveButton {
   background-color: #008ecf;
-  outline: none;
 }
+/*
+#navVideo button.navActiveButton > *,
+#navWhiteboard button.navActiveButton > * {
+  color: #fff;
+}
+*/
 #navVideoDevices > button > svg:nth-child(2) {
   position: absolute;
   right: 6px;
@@ -1027,16 +1027,14 @@ main {
   opacity: 0;
   transition: opacity .2s linear;
 }
-#navWhiteboard button.navActiveButton:not(:focus):not(:hover) > svg > .svgColorWB,
-#navWhiteboard button.navActiveButton:not(:focus):not(:hover) > .svgColorWB {
+#navWhiteboard button.navActiveButton:not(:focus-visible) > span,
+#navWhiteboard button.navActiveButton:not(:focus-visible):not(:hover) > svg > .svgColorWB,
+#navWhiteboard button.navActiveButton:not(:focus-visible):not(:hover) > .svgColorWB,
+#wbControl button.activeButton:not(:focus-visible):not(:hover) > .svgColorWB {
   color: #fff;
 }
-#navWhiteboard button.navActiveButton:not(:focus):not(:hover) > svg > .svgFillVideo,
-#navWhiteboard button.navActiveButton:not(:focus):not(:hover) > .svgFillVideo {
-  fill: #000;
-}
-#navWhiteboard button.navActiveButton:not(:focus):not(:hover) > svg > .svgFillWB,
-#navWhiteboard button.navActiveButton:not(:focus):not(:hover) > .svgFillWB {
+#navWhiteboard button.navActiveButton:not(:focus-visible) > svg > .svgFillWB,
+#navWhiteboard button.navActiveButton:not(:focus-visible) > .svgFillWB {
   fill: #fff;
 }
 #navWhiteboard > fieldset {
@@ -1122,9 +1120,6 @@ main {
 .svgColorWB {
   color: #000;
 }
-.svgFillVideo {
-  fill: #fff;
-}
 .svgFillWB {
   fill: #000;
 }
@@ -1159,30 +1154,30 @@ textarea {
 #wbInner {
   border-radius: 10px;
 }
-#wbControl {
+#wbControlOld {
   display: flex;
   height: 20px;
 }
-#wbControlBack,
-#wbControlForward {
+#wbControlOldBack,
+#wbControlOldForward {
   background: none;
   border: none;
   height: 100%;
   margin: 0;
   padding: 0 5px;
 }
-#wbControlLeft {
+#wbControlOldLeft {
   text-align: left;
   width: 80px;
 }
-#wbControlLeft > button[disabled] > svg {
+#wbControlOldLeft > button[disabled] > svg {
   fill: #c0c0c0 !important;
 }
-#wbControlMiddle {
+#wbControlOldMiddle {
   text-align: center;
   width: calc(100% - 200px);
 }
-#wbControlRight {
+#wbControlOldRight {
   text-align: right;
   width: 120px;
 }
@@ -1191,12 +1186,8 @@ textarea {
   display: block;
   height: 100%;
   touch-action: none; /* Prevents browser from claiming touch for scrolling/zooming */
+  transform-origin: 0 0;
   width: 100%;
-}
-.whiteboardImg {
-  background-repeat: no-repeat;
-  background-size: 100% 100%;
-  height: 100%;
 }
 #wbContextMenu {
   background-color: rgb(0, 0, 0, .6);
@@ -1244,6 +1235,67 @@ textarea {
 }
 #wbContextMenu .svgFill {
   fill: #fff;
+}
+#wbControlOuter {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  width: 100%;
+}
+#wbControl {
+  background-color: #fff;
+  border-radius: 5px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, .25);
+  display: flex;
+  padding: 5px;
+  pointer-events: all;
+}
+#wbControl > button {
+  --dimension: 32px;
+  background: none;
+  border: 1px solid #000;
+  border-radius: 5px;
+  color: #000;
+  height: var(--dimension);
+  margin: 0;
+  padding: 0;
+  width: var(--dimension);
+}
+@media (hover: hover) and (pointer: fine) { /* Mouse devices only */
+  #navVideo button.navButton:hover:not([disabled]),
+  #navVideoDevices > button:hover:not([disabled]),
+  #navWhiteboard button.navButton:hover:not([disabled]) {
+    background-color: #b3ddf1;
+  }
+  #navWhiteboard button.navActiveButton:hover > * {
+    color: #000 !important;
+  }
+  #navWhiteboard button.navActiveButton:not(:focus-visible):not(:hover) > span {
+    color: #fff;
+  }
+  #navWhiteboard button.navActiveButton:hover > svg > .svgFillWB,
+  #navWhiteboard button.navActiveButton:hover > .svgFillWB {
+    fill: #000;
+  }
+  #navWhiteboard button.navActiveButton:not(:focus-visible):not(:hover) > svg > .svgFillWB,
+  #navWhiteboard button.navActiveButton:not(:focus-visible):not(:hover) > .svgFillWB {
+    fill: #fff;
+  }
+  #wbControl > button:hover:not([disabled]) {
+    background-color: #b3ddf1;
+    color: #000;
+  }
+}
+#wbControl > button:focus-visible {
+  background-color: #b3ddf1;
+  outline: none;
+}
+#wbControl > button.activeButton {
+  background-color: #008ecf;
+  color: #fff;
 }
 #wbInner {
   background-color: #fff;
