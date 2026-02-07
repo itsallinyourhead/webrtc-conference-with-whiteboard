@@ -36,8 +36,6 @@ const audio = {
     volume: 0,
   },
 };
-const bytesPerMessageMax = 10 * 1024 * 1024;
-const bytesPerMessageAllowed = bytesPerMessageMax - .25 * 1024 * 1024;
 const camera = {
   local: {
     deviceId: null,
@@ -61,7 +59,7 @@ const camera = {
 window.camera = camera;
 const chat = {
   all: document.getElementById('chatAll'),
-  'new': document.getElementById('chatNew'),
+  new: document.getElementById('chatNew'),
   newOuter: document.getElementById('chatNewOuter'),
   old: document.getElementById('chatOld'),
   oldOuter: document.getElementById('chatOldOuter'),
@@ -70,13 +68,19 @@ const chat = {
   sendMessage: document.getElementById('chatSendMessage'),
 };
 const dataChannel = {
-  bufferedAmountLowThreshold: 65536,
-  chunkSize: 128 * 1024,
-  chunksReceived: [],
-  queues: {
-    maxMessages: 100,
+  receive: {
+    chunks: new Map(), // Map<partnerId, chunks[]>
+    incomingIdsByPartnerId: new Map(), // Map<partnerId, Set>
+    largeMessageCounter: new Map(), // Map<partnerId, Integer>
+    partnerIdByIncomingId: new Map(), // Map<incomingId, partnerId>
+  },
+  send: {
+    bufferedAmountLowThreshold: 65536,
+    chunks: new Map(), // Map<partnerId, boolean>
+    chunkSize: 128 * 1024,
+    largeMessageCounter: 0,
+    maxMessages: 500,
     retryDelay: 100,
-    send: new Map(), // Map<partnerId, boolean>
   },
 };
 let dataChannels = new Map(); // Map<partnerId, RTCDataChannel>
@@ -203,10 +207,6 @@ const internationalisation = {
     de: 'Fehler: Datei nicht gefunden.',
     en: 'Error: File not found.',
   },
-  fileSizeIsTooBig: {
-    de: (args) => {return 'Fehler: Dateigröße von "' + args.name + '" ist zu groß. (Max: ' + megaBytesPerMessageAllowedString + ' MB nach Konvertierung)';},
-    en: (args) => {return 'Error: File size of "' + args.name + '" is too big. (Max: ' + megaBytesPerMessageAllowedString + ' MB after conversion)';},
-  },
   fontFamily: {
     de: 'Schriftart',
     en: 'Font family',
@@ -327,10 +327,6 @@ const internationalisation = {
     de: 'Text',
     en: 'Text',
   },
-  text: {
-    de: 'Text',
-    en: 'Text',
-  },
   thumbnail: {
     de: 'Miniaturansicht',
     en: 'Thumbnail',
@@ -420,12 +416,12 @@ const nav = {
   activeOptions: {
     className: 'navActiveOptions',
     connector: {
-      height: parseInt(uiCSSRuleGet('--navActiveOptionsConnectorHeight', '.navActiveOptionsOuter')),
+      height: parseInt(uiCSSRuleGet('--navActiveOptionsConnectorHeight', '.navActiveOptionsOuter'), 10) || 10,
       html:
         '<svg height="10" viewBox="0 0 18 10" width="18" xmlns="http://www.w3.org/2000/svg">'
           +'<path d="M18 0C15.7909 0 14 1.79086 14 4V6C14 8.20914 15.7909 10 18 10H0C2.20914 10 4 8.20914 4 6V4C4 1.79086 2.20914 0 0 0H18Z"/>'
         +'</svg>',
-      width: parseInt(uiCSSRuleGet('--navActiveOptionsConnectorWidth', '.navActiveOptionsOuter')),
+      width: parseInt(uiCSSRuleGet('--navActiveOptionsConnectorWidth', '.navActiveOptionsOuter'), 10) || 18,
     },
     currentOuter: null,
     keep: false,
@@ -470,6 +466,9 @@ const notifications = {
   duration: 5E3,
   outer: document.getElementById('notificationsOuter'),
 };
+const png = {
+  grab: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAaCAYAAAC3g3x9AAAAAXNSR0IB2cksfwAAAARnQU1BAACxjwv8YQUAAAAgY0hSTQAAeiYAAICEAAD6AAAAgOgAAHUwAADqYAAAOpgAABdwnLpRPAAAAAlwSFlzAAAuIwAALiMBeKU/dgAAALxJREFUSMftVD0LAjEUSw4HEQVddXbz//8YQUG8wcXNPQ7Xk+ddP95BBxUztbzXNE3TAn98HOjsk3fdzEsidVMyr6HJ1E6SXkSRzS5hvPXacVVAJ/B9HEiPAO7eI5eNlfZDC5rat/xdhL3Rba1gS1KfsxuAuaR1ciEJ088YYStpZ8ObyOCIOEUoL0mO0Hp48DytCM6lR64pKkk+AKxSsdlMURn6lp5vyOXn0L9csFlSamoLj0KaoNf4oH8ZT8qIT8u+iQUQAAAAAElFTkSuQmCC',
+};
 const resizeObserver = new ResizeObserver(entries => {
   for (const entry of entries) {
     // Skip if canvas (or any ancestor) is hidden with display: none
@@ -483,7 +482,7 @@ const resizeObserver = new ResizeObserver(entries => {
       if (newHeight !== wb.whiteboard.height || newWidth !== wb.whiteboard.width) {
         wb.whiteboard.height = newHeight;
         wb.whiteboard.width = newWidth;
-        wbRedraw();
+        wbDraw();
         // Adjust position of any active text input if it exists
         const activeInput = document.querySelector('.wbTextInput');
         if (activeInput && wb.selected && 'text' === wb.selected?.type) {
@@ -514,7 +513,7 @@ const rtc = {
   politeStates: new Map(), // Map<partnerId, boolean>
   trackMeta: new Map(), // Map<partnerId, Map<trackId, type>>
 };
-const serverTime = parseInt(document.getElementsByTagName('html')[0].getAttribute('data-server-time'));
+const serverTime = parseInt(document.getElementsByTagName('html')[0].getAttribute('data-server-time'), 10);
 const shareScreen = {
   local: {
     deviceId: null,
@@ -536,6 +535,10 @@ const svg = {
     '<svg fill="none" height="15" viewBox="0 0 14 15" width="14" xmlns="http://www.w3.org/2000/svg">'
       +'<path d="M9.39556 1.8999V6.0999H13.5008L9.39556 1.8999ZM9.39556 1.8999H3.92188V14.4999H13.5008V6.0999" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10"/>'
       +'<path d="M10.0789 2.6V0.5H0.5V13.1H3.92105" stroke="currentColor"/>'
+    +'</svg>',
+  grabbing:
+    '<svg height="20" viewBox="0 0 36 36" width="20" xmlns="http://www.w3.org/2000/svg">'
+      +'<path d="M28.09,9.74a4,4,0,0,0-1.16.19c-.19-1.24-1.55-2.18-3.27-2.18A4,4,0,0,0,22.13,8,3.37,3.37,0,0,0,19,6.3a3.45,3.45,0,0,0-2.87,1.32,3.65,3.65,0,0,0-1.89-.51A3.05,3.05,0,0,0,11,9.89v.91c-1.06.4-4.11,1.8-4.91,4.84s.34,8,2.69,11.78a25.21,25.21,0,0,0,5.9,6.41.9.9,0,0,0,.53.17H25.55a.92.92,0,0,0,.55-.19,13.13,13.13,0,0,0,3.75-6.13A25.8,25.8,0,0,0,31.41,18v-5.5A3.08,3.08,0,0,0,28.09,9.74Z" fill="#fff" stroke="#000" stroke-linejoin="round" stroke-width="1.5"/>'
     +'</svg>',
   layerDown:
     '<svg fill="none" height="15" viewBox="0 0 14 15" width="14" xmlns="http://www.w3.org/2000/svg">'
@@ -605,18 +608,25 @@ const videoOthersOuter = document.getElementById('videoOthersOuter');
 let videoRemote = document.getElementById('videoRemote');
 const videoRemoteOuter = document.getElementById('videoRemoteOuter');
 const wbDefault = {
+  camera: {
+    startX: 0,
+    startY: 0,
+    x: 0,
+    y: 0,
+  },
   contextMenu: {
     copyDiff: 10,
     id: 'wbContextMenu',
   },
   control: {
-    back: document.getElementById('wbControlBack'),
-    forward: document.getElementById('wbControlForward'),
-    'this': document.getElementById('wbControl'),
+    grab: document.getElementById('wbControlGrab'),
+  },
+  controlOld: {
+    back: document.getElementById('wbControlOldBack'),
+    forward: document.getElementById('wbControlOldForward'),
+    'this': document.getElementById('wbControlOld'),
   },
   ctx: document.getElementById('whiteboard')?.getContext('2d'),
-  currentLine: [],
-  currentLinePassive: new Map(), // Map<partnerId, positions[]>
   draggingOffset: {x: 0, y: 0},
   dragStart: null,
   draw: {
@@ -634,7 +644,7 @@ const wbDefault = {
     index: new Map(), // Map<stackId, Map<elementId, index>>
     missing: {
       interval: 2E4,
-      partnerIds: new Map(), // Map<stackId, [partnerIds]>
+      partnerIds: new Map(), // Map<stackId, partnerIds[]>
       timeout: new Map(), // Map<stackId, timeout>
     },
   },
@@ -644,7 +654,7 @@ const wbDefault = {
     defaultLeft: 50,
     defaultSize: 250,
     defaultTop: 50,
-    img: new Map(), // Map<elementId, new Image()>
+    img: new Map(), // Map<elementId, Image>
     minSize: 30,
     offsetX: 0,
     offsetY: 0,
@@ -652,17 +662,24 @@ const wbDefault = {
   },
   inner: document.getElementById('wbInner'),
   isHover: false,
+  isPanning: false,
   isTextDragged: false, // Detect whether text field was dragged
   lineHeightMultiplier: 1.2, // Multiplier for line height in multi-line text
   lines: {
-    currentPartner: new Map(), // Map<partnerId, [points]>
-    points: new Map(), // Map<elementId, [points]>
+    current: [],
+    currentPassive: new Map(), // Map<partnerId, positions[]>
+    points: new Map(), // Map<elementId, points[]>
     pointsReferences: new Map(), // Map<elementId, elementId>
   },
-  mode: 'default', // 'default', 'edit', 'imageDragging', 'imageResizing', 'lineDragging', 'lineDrawing', 'textAdd', 'textDragging', 'textResizing'
+  mode: 'default', // 'default', 'edit', 'grab', 'imageDragging', 'imageResizing', 'lineDragging', 'lineDrawing', 'textAdd', 'textDragging', 'textResizing'
   outer: document.getElementById('wbOuter'),
   partnerCursor: document.getElementById('wbPartnerCursor'),
   partnerCursorOffSent: true,
+  placeHolderSrc: 'data:image/gif;base64,R0lGODdhAQABAIABANPj/f///ywAAAAAAQABAAACAkQBADs=',
+  pointerDown: {
+    duration: 500,
+    timeout: null,
+  },
   selected: null,
   stack: {
     byId: new Map(), // Map<stackId, stack>
@@ -672,7 +689,7 @@ const wbDefault = {
     deleted: [],
     missing: {
       interval: 1E4,
-      partnerIds: new Map(), // Map<stackId, [partnerIds]>
+      partnerIds: new Map(), // Map<stackId, partnerIds[]>
       timeout: new Map(), // Map<stackId, timeout>
     },
     redo: [],
@@ -689,7 +706,7 @@ const wbDefault = {
     colorMax: 25,
     family: 'Arial',
     size: {
-      current: parseInt(nav.text.sizeCurrent.textContent),
+      current: parseInt(nav.text.sizeCurrent.textContent, 10),
       max: 50,
       min: 8,
     },
@@ -850,14 +867,15 @@ function dataChannelCreateInitiator(partnerId) {
   dataChannelInitialize(channel, partnerId);
 }
 function dataChannelInitialize(channel, partnerId) {
-  channel.bufferedAmountLowThreshold = dataChannel.bufferedAmountLowThreshold;
+  channel.bufferedAmountLowThreshold = dataChannel.send.bufferedAmountLowThreshold;
   dataChannels.set(partnerId, channel);
   channel._onBufferedLow = (event) => dataChannelOnBufferedAmountLow(event, partnerId);
   channel._onClose = (event) => dataChannelOnClose(event, partnerId);
   channel._onError = (event) => dataChannelOnError(event, partnerId);
   channel._onMessage = (event) => dataChannelOnMessage(event, partnerId);
   channel._onOpen = (event) => dataChannelOnOpen(event, partnerId);
-  dataChannel.queues.send.set(partnerId, {queue: []});
+  dataChannel.receive.largeMessageCounter.set(partnerId, 0);
+  dataChannel.send.chunks.set(partnerId, []);
   channel.addEventListener('bufferedamountlow', channel._onBufferedLow);
   channel.addEventListener('close', channel._onClose, {once: true});
   channel.addEventListener('error', channel._onError);
@@ -891,7 +909,17 @@ function dataChannelOnClose(event, partnerId) {
       delete channel._onOpen;
     }
   }
-  dataChannel.queues.send.delete(partnerId);
+  dataChannel.receive.chunks.delete(partnerId);
+  const incomingIds = dataChannel.receive.incomingIdsByPartnerId.get(partnerId);
+  if (incomingIds) {
+    for (const value of incomingIds) {
+      dataChannel.receive.partnerIdByIncomingId.delete(value);
+    }
+    dataChannel.receive.incomingIdsByPartnerId.delete(partnerId);
+  }
+  dataChannel.receive.largeMessageCounter.delete(partnerId);
+  dataChannel.send.chunks.delete(partnerId);
+  dataChannel.send.largeMessageCounter = 0;
   dataChannels.delete(partnerId);
   wb.partnerCursorOffSent = false;
 }
@@ -911,16 +939,24 @@ async function dataChannelOnMessage(event, partnerId) {
   if ('chunk' === news.area) {
     if (!isString(news.chunk)
     || !isInt(news.index)
+    || !isInt(news.largeMessageCounter)
     || !isInt(news.total)
     || news.index >= news.total) {
       return;
     }
-    dataChannel.chunksReceived[news.index] = news.chunk;
-    if (dataChannel.chunksReceived.filter(Boolean).length !== news.total) {
+    if (dataChannel.receive.largeMessageCounter.get(partnerId) !== news.largeMessageCounter) {
+      dataChannel.receive.chunks.delete(partnerId);
+      dataChannel.receive.largeMessageCounter.set(partnerId, news.largeMessageCounter)
+    }
+    const chunks = dataChannel.receive.chunks.get(partnerId) || [];
+    chunks[news.index] = news.chunk;
+    dataChannel.receive.chunks.set(partnerId, chunks);
+    const chunksClean = dataChannel.receive.chunks.get(partnerId).filter(Boolean);
+    if (chunksClean.length !== news.total) {
       return;
     }
-    const completeData = dataChannel.chunksReceived.join('');
-    dataChannel.chunksReceived = [];
+    const completeData = chunksClean.join('');
+    dataChannel.receive.chunks.delete(partnerId);
     if (!isJsonString(completeData)) {
       return;
     }
@@ -952,7 +988,7 @@ async function dataChannelOnMessage(event, partnerId) {
       if (textareas.length) {
         let inserted = false;
         for (let i = textareas.length - 1; 0 <= i; --i) {
-          const createdOn = parseInt(textareas[i].getAttribute('data-created-on'));
+          const createdOn = parseInt(textareas[i].getAttribute('data-created-on'), 10);
           if (createdOn > news.createdOn
           || (createdOn === news.createdOn && !isAlphaUser(partnerId))) {
             chat.old.insertBefore(textarea, textareas[i]);
@@ -984,6 +1020,11 @@ async function dataChannelOnMessage(event, partnerId) {
             redraw = true;
           }
         }
+        // Already received meta data of an image
+        if ('image' === news.type && 1 === news.ids.length) {
+          const incomingIds = dataChannel.receive.incomingIdsByPartnerId.get(partnerId);
+          incomingIds && incomingIds.has(news.ids[0]) && (redraw = true);
+        }
         // No expected element received
         if (!redraw) {
           return;
@@ -999,11 +1040,35 @@ async function dataChannelOnMessage(event, partnerId) {
             const img = new Image();
             img.onerror = () => {
               console.error(`Failed to load image: ${id}`);
-              ++loadedCount >= total && wbRedrawCheck(news.ids);
+              if (1 === news.ids.length) {
+                const incomingIds = dataChannel.receive.incomingIdsByPartnerId.get(partnerId);
+                if (incomingIds && incomingIds.has(news.ids[0])) {
+                  incomingIds.delete(news.ids[0]);
+                  if (incomingIds.size) {
+                    dataChannel.receive.incomingIdsByPartnerId.set(partnerId, incomingIds);
+                  } else {
+                    dataChannel.receive.incomingIdsByPartnerId.delete(partnerId);
+                  }
+                  dataChannel.receive.partnerIdByIncomingId.delete(news.ids[0]);
+                }
+              }
+              ++loadedCount >= total && wbDrawCheck(news.ids);
             };
             img.onload = () => {
+              if (1 === news.ids.length) {
+                const incomingIds = dataChannel.receive.incomingIdsByPartnerId.get(partnerId);
+                if (incomingIds && incomingIds.has(news.ids[0])) {
+                  incomingIds.delete(news.ids[0]);
+                  if (incomingIds.size) {
+                    dataChannel.receive.incomingIdsByPartnerId.set(partnerId, incomingIds);
+                  } else {
+                    dataChannel.receive.incomingIdsByPartnerId.delete(partnerId);
+                  }
+                  dataChannel.receive.partnerIdByIncomingId.delete(news.ids[0]);
+                }
+              }
               wb.images.img.set(id, img);
-              ++loadedCount >= total && wbRedrawCheck(news.ids);
+              ++loadedCount >= total && wbDrawCheck(news.ids);
             };
             img.src = news.src; // same src for all IDs in this batch
           }
@@ -1014,7 +1079,7 @@ async function dataChannelOnMessage(event, partnerId) {
           for (const id of news.ids) {
             wbLinePointsSave(id, news.points);
           }
-          wbRedrawCheck(news.ids);
+          wbDrawCheck(news.ids);
         }
       } else if ('elementsPropertyMissing' === news.command) {
         if (!isArray(news.ids) || !news.ids.length
@@ -1198,7 +1263,6 @@ async function dataChannelOnMessage(event, partnerId) {
         for (let i = news.stackDeleted.length - 1; 0 <= i; --i) {
           isString(news.stackDeleted[i]) && !wb.stack.deleted.includes(news.stackDeleted[i]) && wb.stack.deleted.push(news.stackDeleted[i]);
         }
-        let imagesToLoad = 0;
         if (news.stackNew) {
           for (let i = news.stackNew.elements.length - 1; 0 <= i; --i) {
             const element = news.stackNew.elements[i];
@@ -1207,8 +1271,6 @@ async function dataChannelOnMessage(event, partnerId) {
                 const img = wb.images.img.get(element.idOld);
                 img && wb.images.img.set(element.id, img);
                 delete element.idOld;
-              } else if (isString(element.src)) {
-                ++imagesToLoad;
               }
             } else if ('line' === element.type) {
               if (isString(element.idOld)) {
@@ -1225,27 +1287,8 @@ async function dataChannelOnMessage(event, partnerId) {
               }
             }
           }
-          if (imagesToLoad) {
-            let imagesLoaded = 0;
-            for (let i = news.stackNew.elements.length - 1; 0 <= i; --i) {
-              const element = news.stackNew.elements[i];
-              if ('image' === element.type && isString(element.src)) {
-                const img = new Image();
-                img.onerror = function() {
-                  console.error('Failed to load image:', element.id);
-                  ++imagesLoaded >= imagesToLoad && wbStateCompare(news, partnerId);
-                };
-                img.onload = function() {
-                  wb.images.img.set(element.id, img);
-                  ++imagesLoaded >= imagesToLoad && wbStateCompare(news, partnerId);
-                };
-                img.src = element.src;
-                delete element.src;
-              }
-            }
-          }
         }
-        !imagesToLoad && wbStateCompare(news, partnerId);
+        wbStateCompare(news, partnerId);
       }
     }
   } else if ('gallery' === news.area) {
@@ -1288,16 +1331,29 @@ async function dataChannelOnMessage(event, partnerId) {
       }
     }
   } else if ('whiteboard' === news.area) {
-    if ('draw' === news.command) {
+    if ('cursorPosition' === news.command) {
+      if (!isNumber(news.x)
+      || !isNumber(news.y)
+      || !wb.whiteboard) {
+        return;
+      }
+      wb.partnerCursor.style.left = news.x + 'px';
+      wb.partnerCursor.style.top = news.y + 'px';
+      wb.partnerCursor.classList.remove('none');
+    } else if ('cursorPositionOff' === news.command) {
+      wb.partnerCursor.classList.add('none');
+    } else if ('draw' === news.command) {
       if (!isString(news.fillStyle)
       || !isNumber(news.lineWidth) || 0 > news.lineWidth
       || !isString(news.strokeStyle)
-      || !isNumber(news.x) || 0 > news.x
-      || !isNumber(news.y) || 0 > news.y) {
+      || !isNumber(news.x)
+      || !isNumber(news.y)) {
         return;
       }
-      const lineOld = wb.currentLinePassive.get(partnerId) || [];
-      wb.currentLinePassive.set(partnerId, [...lineOld, {x: news.x, y: news.y}]);
+      const lineOld = wb.lines.currentPassive.get(partnerId) || [];
+      const x = news.x - wb.camera.x;
+      const y = news.y - wb.camera.y;
+      wb.lines.currentPassive.set(partnerId, [...lineOld, {x, y}]);
       wb.ctx.lineCap = 'round'; // smooth line ends
       wb.ctx.lineJoin = 'round'; // smooth joints
       wb.ctx.lineWidth = wb.draw.widthPassive = news.lineWidth;
@@ -1314,14 +1370,16 @@ async function dataChannelOnMessage(event, partnerId) {
       if (!isString(news.fillStyle)
       || !isNumber(news.lineWidth) || 0 > news.lineWidth
       || !isString(news.strokeStyle)
-      || !isNumber(news.x) || 0 > news.x
-      || !isNumber(news.y) || 0 > news.y) {
+      || !isNumber(news.x)
+      || !isNumber(news.y)) {
         return;
       }
-      wb.currentLinePassive.set(partnerId, [{x: news.x, y: news.y}]);
+      const x = news.x - wb.camera.x;
+      const y = news.y - wb.camera.y;
+      wb.lines.currentPassive.set(partnerId, [{x, y}]);
       wb.draw.widthPassive = news.lineWidth;
       wb.ctx.beginPath();
-      wb.ctx.arc(news.x, news.y, wb.draw.widthPassive / 2, 0, Math.PI * 2);
+      wb.ctx.arc(x, y, wb.draw.widthPassive / 2, 0, Math.PI * 2);
       wb.ctx.fillStyle = wb.draw.colorPassive = news.strokeStyle;
       wb.ctx.shadowBlur = 0;
       wb.ctx.fill();
@@ -1337,7 +1395,7 @@ async function dataChannelOnMessage(event, partnerId) {
           const yOld = wb.elements[i].y;
           wb.elements[i].x = news.x;
           wb.elements[i].y = news.y;
-          wbRedraw();
+          wbDraw();
           // Reset to avoid accidental saving
           wb.elements[i].x = xOld;
           wb.elements[i].y = yOld;
@@ -1362,7 +1420,7 @@ async function dataChannelOnMessage(event, partnerId) {
           wb.elements[i].width = news.width;
           wb.elements[i].x = news.x;
           wb.elements[i].y = news.y;
-          wbRedraw();
+          wbDraw();
           // Reset to avoid accidental saving
           wb.elements[i].height = heightOld;
           wb.elements[i].width = widthOld;
@@ -1383,7 +1441,7 @@ async function dataChannelOnMessage(event, partnerId) {
           const dyOld = wb.elements[i].dy;
           wb.elements[i].dx = news.dx;
           wb.elements[i].dy = news.dy;
-          wbRedraw();
+          wbDraw();
           // Reset to avoid accidental saving
           wb.elements[i].dx = dxOld;
           wb.elements[i].dy = dyOld;
@@ -1402,7 +1460,7 @@ async function dataChannelOnMessage(event, partnerId) {
           const yOld = wb.elements[i].y;
           wb.elements[i].x = news.x;
           wb.elements[i].y = news.y;
-          wbRedraw();
+          wbDraw();
           // Reset to avoid accidental saving
           wb.elements[i].x = xOld;
           wb.elements[i].y = yOld;
@@ -1434,68 +1492,66 @@ function dataChannelSend(message, params) {
   }
 }
 function dataChannelSendLargeMessage(message, params) {
-  const string = JSON.stringify(message);
-  const totalChunks = Math.ceil(string.length / dataChannel.chunkSize);
+  const messageStringified = JSON.stringify(message);
+  const totalChunks = Math.ceil(messageStringified.length / dataChannel.send.chunkSize);
   for (let i = 0; i < totalChunks; ++i) {
     dataChannelSend({
       area: 'chunk',
-      chunk: string.slice(i * dataChannel.chunkSize, (i + 1) * dataChannel.chunkSize),
+      chunk: messageStringified.slice(i * dataChannel.send.chunkSize, (i + 1) * dataChannel.send.chunkSize),
       index: i,
+      largeMessageCounter: dataChannel.send.largeMessageCounter,
       total: totalChunks,
     }, params);
   }
-}
-function dataChannelSendLargeMessageDeviceList(device) {
-  dataChannelSendLargeMessage({
-    area: 'videoSettings',
-    command: device + 'List',
-    deviceId: window[device].local.deviceId,
-    devices: window[device].local.list,
-  });
+  dataChannel.send.largeMessageCounter + 1 < Number.MAX_SAFE_INTEGER ? ++dataChannel.send.largeMessageCounter : dataChannel.send.largeMessageCounter = 0;
 }
 function dataChannelSendPush(messageStringified, params) {
   const channel = dataChannels.get(params.partnerId);
   if (!channel || 'open' !== channel.readyState) {
-    //console.warn(`Cannot queue send - channel not open for ${params.partnerId}`);
+    //console.warn(`Cannot send queue - channel not open for ${params.partnerId}`);
     return;
   }
-  const state = dataChannel.queues.send.get(params.partnerId);
+  const chunks = dataChannel.send.chunks.get(params.partnerId);
+  // abort if queue is not an array
+  if (!isArray(chunks)) {
+    return;
+  }
   // avoid queueing the same message twice
-  if (!isArray(state.queue) || state.queue.includes(messageStringified)) {
+  if (chunks.includes(messageStringified)) {
     return;
   }
-  state.queue.push(messageStringified);
+  chunks.push(messageStringified);
   dataChannelSendQueue(params.partnerId);
 }
 function dataChannelSendQueue(partnerId) {
   const channel = dataChannels.get(partnerId);
   if (!channel || 'open' !== channel.readyState) {
-    dataChannel.queues.send.delete(partnerId);
-    //console.warn(`Cannot queue send - channel not open for ${params.partnerId}`);
+    dataChannel.send.chunks.delete(partnerId);
+    //console.warn(`Cannot send queue - channel not open for ${params.partnerId}`);
     return;
   }
-  const state = dataChannel.queues.send.get(partnerId);
-  if (!isArray(state?.queue) || !state.queue.length) {
+  const chunks = dataChannel.send.chunks.get(partnerId);
+  if (!isArray(chunks) || !chunks.length) {
     return;
   }
-  while (state.queue.length) {
+  while (chunks.length) {
     // Check buffer
-    if (channel.bufferedAmount > dataChannel.bufferedAmountLowThreshold) {
+    if (channel.bufferedAmount > dataChannel.send.bufferedAmountLowThreshold) {
       // Buffer is too full -> wait for low event
       return;
     }
-    const message = state.queue.shift();
+    const message = chunks.shift();
     try {
       channel.send(message);
     } catch (error) {
       //console.warn(`[DataChannel ${partnerId}] Send failed:`, error);
-      dataChannel.queues.maxMessages > state.queue.length && state.queue.unshift(message);
-      if (!state.timeoutScheduled) {
-        state.timeoutScheduled = true;
+      dataChannel.send.maxMessages > chunks.length && chunks.unshift(message);
+      if (!chunks.timeoutScheduled) {
+        chunks.timeoutScheduled = true;
         setTimeout(() => {
-          state.timeoutScheduled = false;
+          chunks.timeoutScheduled = false;
           dataChannelSendQueue(partnerId);
-        }, dataChannel.queues.retryDelay);
+        }, dataChannel.send.retryDelay);
       }
       return;
     }
@@ -1505,7 +1561,7 @@ function documentOnClick(event) {
   !chat.outer?.contains(event.target) && chatClose();
   !document.getElementById('wbContextMenu')?.contains(event.target) && wbContextMenuRemove(event);
   const id = event.target?.id;
-  isString(id) && id.startsWith('nav') && 'button' === event.target?.tagName?.toLowerCase() && event.target?.blur();
+  isString(id) && (id.startsWith('nav') || id.startsWith('wbControl')) && 'button' === event.target?.tagName?.toLowerCase() && event.target?.blur();
   if (!nav.activeOptions.keep && nav.activeOptions.currentOuter && !nav.activeOptions.currentOuter.contains(event.target)) {
     const statusOld = event.target.getAttribute('data-status');
     navActiveOptionsClose();
@@ -1582,10 +1638,12 @@ function documentOnClick(event) {
     wbContextMenuLayerUpOnClick(event);
   } else if ('wbContextMenuLock' === id) {
     wbContextMenuLockOnClick(event);
-  } else if (wb.control.back === event.target) {
-    wbControlBackOnClick(event);
-  } else if (wb.control.forward === event.target) {
-    wbControlForwardOnClick(event);
+  } else if (wb.control.grab === event.target) {
+    wbControlGrabOnClick(event);
+  } else if (wb.controlOld.back === event.target) {
+    wbControlOldBackOnClick(event);
+  } else if (wb.controlOld.forward === event.target) {
+    wbControlOldForwardOnClick(event);
   } else if (id.startsWith('navDrawColorPickerColor-')) {
     navDrawColorPickerButtonOnClick(event);
   } else if (id.startsWith('navTextColorPickerColor-')) {
@@ -1862,7 +1920,7 @@ async function generalRecycleBinOnClick(event) {
     const mediaUrl = parent.getAttribute('data-cache-url');
     mediaUrl && await cacheDelete(media, mediaUrl);
   } else if ('ram' === mediaLocation) {
-    const mediaIndex = parseInt(parent.getAttribute('data-ram-index'));
+    const mediaIndex = parseInt(parent.getAttribute('data-ram-index'), 10);
     isNumber(mediaIndex) && (media.recording.media[mediaIndex] = {});
   }
   const outer = document.getElementById('navActiveOptionsOuter-navOptions' + type.charAt(0).toUpperCase() + type.slice(1) + 'Recording');
@@ -1887,9 +1945,15 @@ function generalRGBToHexGet(rgb) {
   // Convert each RGB value to hex
   let hex = '#';
   for (let i = 1; i < 4; ++i) {
-    hex += parseInt(match[i]).toString(16).padStart(2, '0');
+    hex += parseInt(match[i], 10).toString(16).padStart(2, '0');
   }
   return hex;
+}
+function generalSVGToCursor(svgString, hotX = 10, hotY = 10) {
+  const encoded = encodeURIComponent(svgString)
+    .replace(/'/g, '%27')
+    .replace(/"/g, '%22');
+  return `url("data:image/svg+xml,${encoded}") ${hotX} ${hotY}`;
 }
 // Generate thumbnail from video Blob
 async function generalVideoThumbnailGet(blob) {
@@ -2133,7 +2197,7 @@ function navActiveButton(className, event, innerHTML, targetClassName) {
       event.target.parentElement.insertBefore(outer, event.target.nextElementSibling);
     }
     const outerRect = outer.getBoundingClientRect();
-    const bodyRect = document.body.getBoundingClientRect();
+    const bodyRect = document.documentElement.getBoundingClientRect();
     let outerLeft = targetRect.left + targetRect.width - targetRect.width / 2 - outer.getBoundingClientRect().width / 2;
     outerLeft + outerRect.width > bodyRect.width && (outerLeft -= outerLeft + outerRect.width - bodyRect.width);
     outerLeft = Math.max(outerLeft, 0);
@@ -2151,7 +2215,7 @@ function navActiveButton(className, event, innerHTML, targetClassName) {
   outer.style.height = outerRectCurrent.height + 'px';
   outer.style.width = outerRectCurrent.width + 'px';
   outer.offsetHeight; // Force reflow to ensure new properties are applied
-  outer.style.transition = `height ${(heightMax - outerRectCurrent.height) / heightMax * nav.activeOptions.transitionDuration}s linear`;
+  outer.style.transition = `height ${(heightMax - outerRectCurrent.height) / Math.max(heightMax, 1) * nav.activeOptions.transitionDuration}s linear`;
   outer.style.height = heightMax + 'px';
 }
 function navActiveOptionsClose(event) {
@@ -2160,7 +2224,11 @@ function navActiveOptionsClose(event) {
     if (!isString(elem.id) || '' === elem.id) {
       continue;
     }
-    const elemById = document.getElementById(elem.id.split('-')[1]);
+    const initiatorId = elem.id.split('-')[1];
+    if (!initiatorId) {
+      continue;
+    }
+    const elemById = document.getElementById(initiatorId);
     if ('closing' === elemById?.getAttribute('data-status')) {
       continue;
     }
@@ -2174,7 +2242,7 @@ function navActiveOptionsClose(event) {
     }
     elem.style.height = heightCurrent + 'px';
     elem.offsetHeight; // Force reflow to ensure new properties are applied
-    elem.style.transition = `height ${heightCurrent / heightMax * nav.activeOptions.transitionDuration}s linear`;
+    elem.style.transition = `height ${heightCurrent / Math.max(heightMax, 1) * nav.activeOptions.transitionDuration}s linear`;
     elem.style.height = 0;
     elem.addEventListener('transitionend', navActiveOptionsOuterOnTransitionEnd, {once: true});
   }
@@ -2188,12 +2256,11 @@ function navActiveOptionsOuterOnTransitionEnd(event) {
   const initiatorClassName = initiator?.getAttribute('data-class-name');
   initiatorClassName && initiator?.classList.remove(initiatorClassName);
   initiator?.removeAttribute('data-status');
-  //isString(event.target.id) && 'navOptionsVideoRecording' === event.target.id.split('-')[1] && !document.getElementById('galleryBackground') && document.getElementById('galleryLink')?.remove();
   nav.activeOptions.currentOuter === event.target && (nav.activeOptions.currentOuter = null);
   event.target.remove();
 }
 function navActiveOptionsOuterRepositioning(event) {
-  const bodyRect = document.body.getBoundingClientRect();
+  const bodyRect = document.documentElement.getBoundingClientRect();
   for (let elems = document.querySelectorAll('.navActiveOptionsOuter:not(#navActiveOptionsOuter-navOptionsVideoRecording)'), i = 0; i < elems.length; ++i) {
     const elemId = elems[i].id;
     if (!isString(elemId)) {
@@ -2227,7 +2294,7 @@ function navDrawColorPickerButtonOnClick(event) {
     elems[i].classList.remove(classActive);
   }
   event.target?.classList.add(classActive);
-  const colorIndex = parseInt(event.target?.id?.split('-')[1]);
+  const colorIndex = parseInt(event.target?.id?.split('-')[1], 10);
   isNumber(colorIndex) && (wb.draw.colorIndex = colorIndex);
   const rgb = getComputedStyle(event.target).backgroundColor;
   if (!rgb) {
@@ -2241,24 +2308,22 @@ function navDrawColorPickerOnClick(event) {
   if (!isString(targetId)) {
     return;
   }
-  const className = nav.activeOptions.className;
   let innerHTML = '';
-  if (!document.getElementById(className + 'Outer-' + targetId)) {
+  if (!document.getElementById(nav.activeOptions.className + 'Outer-' + targetId)) {
     innerHTML = '<div id="navDrawColorPickerColorOuter">';
     for (let i = 0; i < wb.draw.colorMax; ++i) {
       innerHTML += '<button' + (wb.draw.colorIndex === i ? ' class="navDrawColorPickerColorActive"' : '') + ' id="navDrawColorPickerColor-' + i + '"></button>';
     }
     innerHTML += '</div>';
   }
-  navActiveButton(className, event, innerHTML, 'navActiveButton');
+  navActiveButton(nav.activeOptions.className, event, innerHTML, 'navActiveButton');
 }
 function navDrawLineWidthOnClick(event) {
   const targetId = event.target?.id;
   if (!isString(targetId)) {
     return;
   }
-  const className = nav.activeOptions.className;
-  const hasOuter = document.getElementById(className + 'Outer-' + targetId);
+  const hasOuter = document.getElementById(nav.activeOptions.className + 'Outer-' + targetId);
   let innerHTML = '';
   if (!hasOuter) {
     innerHTML =
@@ -2270,7 +2335,7 @@ function navDrawLineWidthOnClick(event) {
         +'</div>'
       +'</div>';
   }
-  navActiveButton(className, event, innerHTML, 'navActiveButton');
+  navActiveButton(nav.activeOptions.className, event, innerHTML, 'navActiveButton');
   !hasOuter && document.getElementById('navDrawLineWidthSlider')?.addEventListener('change', navDrawLineWidthSliderOnChange);
 }
 function navDrawPencilOnClick(event) {
@@ -2280,7 +2345,7 @@ function navDrawPencilOnClick(event) {
 function navDrawLineWidthSliderOnChange(event) {
   navActiveOptionsClose();
   wbModeChange('default');
-  const width = parseInt(this.value);
+  const width = parseInt(this.value, 10);
   wb.draw.width = width;
   this.setAttribute('aria-valuenow', width);
 }
@@ -2351,13 +2416,12 @@ async function navOptionsAudioRecordingOnClick(event) {
   if (!isString(targetId)) {
     return;
   }
-  const className = nav.activeOptions.className;
   let innerHTML = '';
   const outerId = 'navOptionsAudioRecordingActiveOptions';
   const pauseId = 'navOptionsAudioRecordingPause';
   const startId = 'navOptionsAudioRecordingStart';
   const stopId = 'navOptionsAudioRecordingStop';
-  if (!document.getElementById(className + 'Outer-' + targetId)) {
+  if (!document.getElementById(nav.activeOptions.className + 'Outer-' + targetId)) {
     const audios = await navOptionsAudioRecordingGetAndSort();
     const cache = await caches.open(audio.recording.cache.name);
     const deleteTitle = i18n('deleteAudioRecording');
@@ -2430,7 +2494,7 @@ async function navOptionsAudioRecordingOnClick(event) {
     }
     innerHTML += '</div>';
   }
-  navActiveButton(className, event, innerHTML, 'navActiveButton');
+  navActiveButton(nav.activeOptions.className, event, innerHTML, 'navActiveButton');
   if (!innerHTML) {
     return;
   }
@@ -2765,7 +2829,7 @@ async function navOptionsRecordingNameOnChange(event) {
         await cache.put(url, newResponse);
       }
     } else if ('ram' === mediaLocation) {
-      const index = parseInt(event.target.parentElement?.getAttribute('data-ram-index'));
+      const index = parseInt(event.target.parentElement?.getAttribute('data-ram-index'), 10);
       isInt(index) && media.recording.media[index] && (media.recording.media[index].name = newName);
     }
   }
@@ -2791,7 +2855,7 @@ async function navOptionsRecordingRepositioning(type, options = {}) {
     return;
   }
   const inputLength = outer.getElementsByTagName('input').length;
-  const bodyRect = document.body.getBoundingClientRect();
+  const bodyRect = document.documentElement.getBoundingClientRect();
   const connectorLeftOld = connector.offsetLeft;
   const outerRect = options.outerRect ?? outer.getBoundingClientRect();
   const heightStart = outerRect.height;
@@ -2897,7 +2961,7 @@ async function navOptionsVideoRecordingCurrentSet(elem) {
       };
     }
   } else if ('ram' === videoLocation) {
-    const index = parseInt(elem?.getAttribute('data-ram-index'));
+    const index = parseInt(elem?.getAttribute('data-ram-index'), 10);
     if (!isInt(index) || !video.recording.media[index]) {
       console.error('Video not found:', index);
       video.recording.current = null;
@@ -2912,13 +2976,12 @@ async function navOptionsVideoRecordingOnClick(event) {
   if (!isString(targetId)) {
     return;
   }
-  const className = nav.activeOptions.className;
   let innerHTML = '';
   const outerId = 'navOptionsVideoRecordingActiveOptions';
   const pauseId = 'navOptionsVideoRecordingPause';
   const startId = 'navOptionsVideoRecordingStart';
   const stopId = 'navOptionsVideoRecordingStop';
-  if (!document.getElementById(className + 'Outer-' + targetId)) {
+  if (!document.getElementById(nav.activeOptions.className + 'Outer-' + targetId)) {
     let disabled = false;
     const mimeTypes = {
       mp4: 'video/mp4',
@@ -2972,7 +3035,7 @@ async function navOptionsVideoRecordingOnClick(event) {
     }
     innerHTML += '</div>';
   }
-  navActiveButton(className, event, innerHTML, 'navActiveButton');
+  navActiveButton(nav.activeOptions.className, event, innerHTML, 'navActiveButton');
   if (!innerHTML) {
     return;
   }
@@ -3164,11 +3227,10 @@ async function navOptionsWhiteboardRecordingOnClick(event) {
   if (!isString(targetId)) {
     return;
   }
-  const className = nav.activeOptions.className;
   let innerHTML = '';
   const outerId = 'navOptionsWhiteboardRecordingActiveOptions';
   const startId = 'navOptionsWhiteboardRecordingStart';
-  if (!document.getElementById(className + 'Outer-' + targetId)) {
+  if (!document.getElementById(nav.activeOptions.className + 'Outer-' + targetId)) {
     const deleteTitle = i18n('deletePhoto');
     const photos = await navOptionsRecordingGetAndSort(whiteboard);
     const startTitle = i18n('photoOfWhiteboard');
@@ -3195,7 +3257,7 @@ async function navOptionsWhiteboardRecordingOnClick(event) {
     }
     innerHTML += '</div>';
   }
-  navActiveButton(className, event, innerHTML, 'navActiveButton');
+  navActiveButton(nav.activeOptions.className, event, innerHTML, 'navActiveButton');
   if (!innerHTML) {
     return;
   }
@@ -3255,7 +3317,7 @@ function navTextColorPickerButtonOnClick(event) {
     elems[i].classList.remove(classActive);
   }
   event.target?.classList.add(classActive);
-  const colorIndex = parseInt(event.target?.id?.split('-')[1]);
+  const colorIndex = parseInt(event.target?.id?.split('-')[1], 10);
   isNumber(colorIndex) && (wb.text.colorIndex = colorIndex);
   const rgb = getComputedStyle(event.target).backgroundColor;
   if (!rgb) {
@@ -3269,16 +3331,15 @@ function navTextColorPickerOnClick(event) {
   if (!isString(targetId)) {
     return;
   }
-  const className = nav.activeOptions.className;
   let innerHTML = '';
-  if (!document.getElementById(className + 'Outer-' + targetId)) {
+  if (!document.getElementById(nav.activeOptions.className + 'Outer-' + targetId)) {
     innerHTML = '<div id="navTextColorPickerColorOuter">';
     for (let i = 0; i < wb.text.colorMax; ++i) {
       innerHTML += '<button' + (wb.text.colorIndex === i ? ' class="navTextColorPickerColorActive"' : '') + ' id="navTextColorPickerColor-' + i + '"></button>';
     }
     innerHTML += '</div>';
   }
-  navActiveButton(className, event, innerHTML, 'navActiveButton');
+  navActiveButton(nav.activeOptions.className, event, innerHTML, 'navActiveButton');
 }
 function navTextFamilyButtonOnClick(event) {
   navActiveOptionsClose();
@@ -3289,7 +3350,10 @@ function navTextFamilyButtonOnClick(event) {
   }
   event.target.classList.add('navTextFamilyButtonActive');
   nav.text.family.classList.add('family' + event.target.textContent.replaceAll(' ', '').replaceAll('-', ''));
-  nav.text.family.textContent = event.target.textContent;
+  const span = document.createElement('span');
+  span.textContent = event.target.textContent;
+  nav.text.family.textContent = '';
+  nav.text.family.appendChild(span);
   wb.text.family = event.target.textContent.includes(' ') ? "'" + event.target.textContent + "'" : event.target.textContent;
   navTextSizeFamily();
 }
@@ -3301,16 +3365,15 @@ function navTextFamilyOnClick(event) {
   if (!isString(targetId)) {
     return;
   }
-  const className = nav.activeOptions.className;
   let innerHTML = '';
-  if (!document.getElementById(className + 'Outer-' + targetId)) {
+  if (!document.getElementById(nav.activeOptions.className + 'Outer-' + targetId)) {
     innerHTML = '<div id="navTextFamilyOuter">';
     for (let i = 0; i < fonts.length; ++i) {
       innerHTML += '<button class="family' + fonts[i].replaceAll(' ', '').replaceAll('-', '') + ' navTextFamilyButton' + (wb.text.family.replaceAll("'", '') === fonts[i] ? ' navTextFamilyButtonActive' : '') + '">' + generalEscapeHTML(fonts[i]) + '</button>';
     }
     innerHTML += '</div>';
   }
-  navActiveButton(className, event, innerHTML, 'navActiveButton');
+  navActiveButton(nav.activeOptions.className, event, innerHTML, 'navActiveButton');
 }
 function navTextSizeFamily() {
   nav.text.sizeCurrent?.classList.forEach(className => {
@@ -3327,7 +3390,7 @@ function navTextSizeInputChanged(event) {
     event.target.value = event.target.defaultValue;
     return;
   }
-  const size = parseInt(value);
+  const size = parseInt(value, 10);
   if (!isInt(size)) {
     event.target.value = event.target.defaultValue;
     return;
@@ -3354,10 +3417,10 @@ function navTextSizeInputChanged(event) {
 function navTextSizeInputOnChange(event) {
   const value = event.target.value;
   if ('' === event.target.value) {
-    wb.text.size.current = parseInt(event.target.defaultValue);
+    wb.text.size.current = parseInt(event.target.defaultValue, 10);
     return;
   }
-  nav.text.sizeCurrent.textContent = wb.text.size.current = Math.min(Math.max(parseInt(value), wb.text.size.min), wb.text.size.max);
+  nav.text.sizeCurrent.textContent = wb.text.size.current = Math.min(Math.max(parseInt(value, 10), wb.text.size.min), wb.text.size.max);
   wbModeChange('textAdd');
 }
 function navTextSizeInputOnInput(event) {
@@ -3375,15 +3438,14 @@ function navTextSizeOnClick(event) {
   if (!isString(targetId)) {
     return;
   }
-  const className = nav.activeOptions.className;
   let innerHTML = '';
-  if (!document.getElementById(className + 'Outer-' + targetId)) {
+  if (!document.getElementById(nav.activeOptions.className + 'Outer-' + targetId)) {
     innerHTML =
       '<div id="navTextSizeOuter">'
-        +'<input class="family' + wb.text.family.replaceAll("'", '').replaceAll(' ', '').replaceAll('-', '') + '" id="navTextSizeInput" max="' + wb.text.size.max + '" min="' + wb.text.size.min + '" style="font-size: ' + wb.text.size.current + 'px; line-height: ' + (wb.text.size.max + 5) + 'px;" type="number" value="' + wb.text.size.current + '">'
+        +'<input class="family' + wb.text.family.replaceAll("'", '').replaceAll(' ', '').replaceAll('-', '') + '" id="navTextSizeInput" max="' + wb.text.size.max + '" min="' + wb.text.size.min + '" style="font-size: ' + wb.text.size.current + 'px; line-height: ' + (wb.text.size.max + 15) + 'px;" type="number" value="' + wb.text.size.current + '">'
       +'</div>';
   }
-  navActiveButton(className, event, innerHTML, 'navActiveButton');
+  navActiveButton(nav.activeOptions.className, event, innerHTML, 'navActiveButton');
   document.getElementById('navTextSizeInput')?.addEventListener('change', navTextSizeInputOnChange);
   document.getElementById('navTextSizeInput')?.addEventListener('input', navTextSizeInputOnInput);
   document.getElementById('navTextSizeInput')?.addEventListener('keydown', navTextSizeInputOnKeyDown);
@@ -3934,7 +3996,6 @@ async function rtcMediaDevicesAvailable(deviceType) {
     'camera' === deviceType && (camera.local.list = devices.filter(device => 'videoinput' === device.kind));
     'microphone' === deviceType && (microphone.local.list = devices.filter(device => 'audioinput' === device.kind));
     navigator.mediaDevices.addEventListener('devicechange', rtcMediaDevicesOnDeviceChange);
-    dataChannelSendLargeMessageDeviceList(deviceType);
   } catch (error) {
     console.error('[MEDIA DEVICES] Error enumerating devices:', error);
   }
@@ -3962,7 +4023,6 @@ async function rtcMediaDevicesOnDeviceChange() {
           document.getElementById('videoLocalCameraList')?.setAttribute('value', 'default');
         }
       }
-      dataChannelSendLargeMessageDeviceList('camera');
     }
     if (microphoneOld !== microphone.local.list) {
       if (null !== microphone.local.deviceId) {
@@ -3978,7 +4038,6 @@ async function rtcMediaDevicesOnDeviceChange() {
           document.getElementById('videoLocalMicrophoneList')?.setAttribute('value', 'default');
         }
       }
-      dataChannelSendLargeMessageDeviceList('microphone');
     }
   } catch (error) {
     console.error('[MEDIA DEVICES] Error enumerating devices:', error);
@@ -4282,7 +4341,6 @@ function videoEnd(partnerId = null) {
       camera.remote.streams.delete(partnerId);
     }
     camera.remote.tracks.delete(partnerId);
-    dataChannels.delete(partnerId);
     gallery.video.recordedTrackAdded.delete(partnerId);
     microphone.remote.tracks.delete(partnerId);
     rtc.answerQueues.delete(partnerId);
@@ -4295,6 +4353,7 @@ function videoEnd(partnerId = null) {
     shareScreen.remote.tracks.delete(partnerId);
     videoRemote.srcObject = null;
     videoRemote.pause();
+    wb.element.missing.partnerIds.delete(partnerId);
     wb.stack.changedPartner.delete(partnerId);
     //console.log(`[VIDEO-END] Ended connection with partner ${partnerId}.`);
   } else {
@@ -4355,10 +4414,8 @@ async function videoLocalListOnChange(event) {
   if (!isString(event.target.value)) {
     return;
   }
-  const device = event.target.getAttribute('data-device');
-  window[device].local.deviceId = event.target.value;
+  window[event.target.getAttribute('data-device')].local.deviceId = event.target.value;
   await rtcLocalAcquire();
-  dataChannelSendLargeMessageDeviceList(device);
 }
 async function videoLocalMicrophoneOnClick(event) {
   event.target.blur();
@@ -4503,7 +4560,6 @@ function wbClear() {
   wb.element.missing.partnerIds.clear();
   wb.element.missing.timeout.clear();
   wb.images.img.clear();
-  wb.lines.currentPartner.clear();
   wb.lines.points.clear();
   wb.lines.pointsReferences.clear();
   wb.stack.byId.clear();
@@ -4515,7 +4571,7 @@ function wbClear() {
   wb.stack.changed = wbStartTimeDifferenceGet();
 }
 function wbContextMenuCopyOnClick(event) {
-  const index = parseInt(event.target.parentElement?.getAttribute('data-elements-index'));
+  const index = parseInt(event.target.parentElement?.getAttribute('data-elements-index'), 10);
   if (isInt(index) && wb.elements[index]) {
     const copy = 'image' === wb.elements[index].type ? {...wb.elements[index]} : structuredClone(wb.elements[index]);
     const idOld = copy.id;
@@ -4558,12 +4614,12 @@ function wbContextMenuCopyOnClick(event) {
     } else {
       wbStateSave();
     }
-    wbRedraw();
+    wbDraw();
   }
   wbContextMenuRemove(event);
 }
 function wbContextMenuDeleteOnClick(event) {
-  const index = parseInt(event.target.parentElement?.getAttribute('data-elements-index'));
+  const index = parseInt(event.target.parentElement?.getAttribute('data-elements-index'), 10);
   if (!isInt(index) || !wb.elements[index]) {
     return;
   }
@@ -4571,41 +4627,41 @@ function wbContextMenuDeleteOnClick(event) {
   wb.elements.splice(index, 1);
   wb.selected = null;
   wbStateSave({elementDeletedId: elementId});
-  wbRedraw();
+  wbDraw();
   wbContextMenuRemove(event);
 }
 function wbContextMenuLayerDownOnClick(event) {
-  const index = parseInt(event.target.parentElement?.getAttribute('data-elements-index'));
+  const index = parseInt(event.target.parentElement?.getAttribute('data-elements-index'), 10);
   if (!isInt(index) || !wb.elements[index] || !wb.elements[index - 1]) {
     return;
   }
   [wb.elements[index - 1], wb.elements[index]] = [wb.elements[index], wb.elements[index - 1]];
   event.target.parentElement?.setAttribute('data-elements-index', index - 1);
   wbStateSave();
-  wbRedraw();
+  wbDraw();
 }
 function wbContextMenuLayerUpOnClick(event) {
-  const index = parseInt(event.target.parentElement?.getAttribute('data-elements-index'));
+  const index = parseInt(event.target.parentElement?.getAttribute('data-elements-index'), 10);
   if (!isInt(index) || !wb.elements[index] || !wb.elements[index + 1]) {
     return;
   }
   [wb.elements[index + 1], wb.elements[index]] = [wb.elements[index], wb.elements[index + 1]];
   event.target.parentElement?.setAttribute('data-elements-index', index + 1);
   wbStateSave();
-  wbRedraw();
+  wbDraw();
 }
 function wbContextMenuOnPointerMove(event) {
-  const index = parseInt(document.getElementById('wbContextMenu')?.getAttribute('data-elements-index'));
+  const index = parseInt(document.getElementById('wbContextMenu')?.getAttribute('data-elements-index'), 10);
   if (!isInt(index) || !isString(wb.elements[index]?.id)) {
     return;
   }
   if (wb.selected?.id !== wb.elements[index].id) {
     wb.selected = wb.elements[index];
-    wbRedraw();
+    wbDraw();
   }
 }
 function wbContextMenuLockOnClick(event) {
-  const index = parseInt(event.target.parentElement?.getAttribute('data-elements-index'));
+  const index = parseInt(event.target.parentElement?.getAttribute('data-elements-index'), 10);
   if (!isInt(index) || !wb.elements[index]) {
     return;
   }
@@ -4618,7 +4674,7 @@ function wbContextMenuLockOnClick(event) {
   wbStateSave();
 }
 function wbContextMenuOnMouseOut(event) {
-  wbDeselect() && wbRedraw();
+  wbDeselect() && wbDraw();
 }
 function wbContextMenuOnWheel(event) {
   event.preventDefault();
@@ -4630,21 +4686,27 @@ function wbContextMenuRemove(event) {
     if (!wb.whiteboard) {
       return;
     }
+    //const screen = wbPositionScreenGet(event);
+    //const world = wbPositionWorldGet(screen.x, screen.y);
+    //const index = wbElementHoverGetIndex(world.x, world.y);
     const whiteboardRect = wb.whiteboard.getBoundingClientRect();
     const index = wbElementHoverGetIndex(event.clientX - whiteboardRect.left, event.clientY - whiteboardRect.top);
     // highlight hovered element
     if (0 <= index && wb.elements[index]) {
       if (wb.elements[index].id !== wb.selected?.id) {
         wb.selected = wb.elements[index];
-        wbRedraw();
+        wbDraw();
       }
     // unhighlight element
     } else {
-      wbDeselect() && wbRedraw();
+      wbDeselect() && wbDraw();
     }
   }
 }
-function wbControlBackOnClick(event) {
+function wbControlGrabOnClick(event) {
+  wbModeChange(event.target.classList.contains('activeButton') ? 'edit' : 'grab');
+}
+function wbControlOldBackOnClick(event) {
   if (2 > wb.stack.undo.length) { // Need at least current state and one previous to undo
     return;
   }
@@ -4657,7 +4719,7 @@ function wbControlBackOnClick(event) {
   wbStateLoad(elements);
   wbStackUndoChanged();
 }
-function wbControlForwardOnClick(event) {
+function wbControlOldForwardOnClick(event) {
   if (!wb.stack.redo.length) {
     return;
   }
@@ -4683,6 +4745,160 @@ function wbDeselect() {
     return true;
   }
   return false;
+}
+function wbDraw() {
+  if (!wb.ctx || !wb.whiteboard) {
+    notificationsShow(i18n('whiteboardNotFound'));
+    return;
+  }
+  const ctx = wb.ctx;
+  // Reset transform and clear screen
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, wb.whiteboard.width, wb.whiteboard.height);
+  // Apply camera transform
+  ctx.setTransform(1, 0, 0, 1, wb.camera.x, wb.camera.y);
+  for (let i = 0; i < wb.elements.length; ++i) {
+    ctx.save();
+    const element = wb.elements[i];
+    if (!element) {
+      ctx.restore();
+      continue;
+    }
+    // Selection glow
+    if (wb.selected?.id === element.id
+    && ['edit', 'imageDragging', 'imageResizing', 'lineDragging', 'textDragging', 'textResizing'].includes(wb.mode)) {
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = 'red';
+    } else {
+      ctx.shadowBlur = 0;
+    }
+    if (element.type === 'image') {
+      const img = wb.images.img.get(element.id) || wbPlaceHolder;
+      img && ctx.drawImage(img, element.x, element.y, element.width, element.height);
+    } else if (element.type === 'line') {
+      if (!isNumber(element.dx) || !isNumber(element.dy)) {
+        ctx.restore();
+        continue;
+      }
+      const reference = wb.lines.pointsReferences.get(element.id);
+      if (!isString(reference)) {
+        ctx.restore();
+        continue;
+      }
+      const basePoints = wb.lines.points.get(reference);
+      if (!isArray(basePoints) || !basePoints.length) {
+        ctx.restore();
+        continue;
+      }
+      const points = basePoints.map(pt => ({
+        x: pt.x + element.dx,
+        y: pt.y + element.dy
+      }));
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.lineWidth = element.width;
+      ctx.strokeStyle = element.color;
+      ctx.beginPath();
+      ctx.moveTo(points[0].x, points[0].y);
+      for (let j = points.length === 1 ? 0 : 1; j < points.length; ++j) {
+        ctx.lineTo(points[j].x, points[j].y);
+      }
+      ctx.stroke();
+    } else if (element.type === 'text') {
+      if (!element.display) {
+        ctx.restore();
+        continue;
+      }
+      const activeInput = document.querySelector(
+        `.wbTextInput[data-text-id="${element.id}"]`
+      );
+      if (activeInput && document.activeElement === activeInput) {
+        ctx.restore();
+        continue;
+      }
+      ctx.font = `${element.size}px ${element.family}`;
+      ctx.fillStyle = element.color;
+      ctx.textBaseline = 'top';
+      const lines = element.value.split('\n');
+      let currentY = element.y + wb.textPadding;
+      for (const line of lines) {
+        ctx.fillText(
+          line,
+          element.x + wb.textPadding,
+          currentY + 3
+        );
+        currentY += element.size * wb.lineHeightMultiplier;
+      }
+    }
+    ctx.restore();
+  }
+  // Reset transform
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+}
+function wbDrawCheck(elementIds) {
+  const elements = wbStackCurrentGet()?.elements;
+  if (!isArray(elements)) {
+    return;
+  }
+  const ids = new Set(elementIds);
+  for (const element of elements) {
+    if (ids.has(element?.id)) {
+      wbStateLoad(elements);
+      return;
+    }
+  }
+}
+function wbElementAtPositionGet(x, y) {
+  for (let i = wb.elements.length - 1; 0 <= i; --i) {
+    const element = wb.elements[i];
+    if (['image', 'text'].includes(element?.type)) {
+      if (x >= element.x && x <= element.x + element.width
+      && y >= element.y && y <= element.y + element.height) {
+        return null;
+      }
+    } else if ('line' === element?.type) {
+      if (!isNumber(element.dx) || !isNumber(element.dy)) {
+        continue;
+      }
+      const reference = wb.lines.pointsReferences.get(element.id);
+      if (!isString(reference)) {
+        continue;
+      }
+      const basePoints = wb.lines.points.get(reference);
+      if (!isArray(basePoints) || !basePoints.length) {
+        continue;
+      }
+      const points = [...basePoints].map(pt => ({
+        x: pt.x + element.dx,
+        y: pt.y + element.dy,
+      }));
+      // Special case: single point (dot)
+      if (1 === points.length) {
+        const p = points[0];
+        const dx = x - p.x;
+        const dy = y - p.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const hitRadius = element.width / 2;
+        if (distance <= hitRadius) {
+          return element;
+        }
+        continue;
+      }
+      // Multiple points: normal polyline
+      const path = new Path2D();
+      path.reset?.(); // Optional: needed in some cases to clear Path2D (experimental)
+      path.moveTo(points[0].x, points[0].y);
+      for (let j = 1; j < points.length; ++j) {
+        path.lineTo(points[j].x, points[j].y);
+      }
+      wb.ctx.lineWidth = element.width;
+      wb.ctx.strokeStyle = element.color;
+      if (wb.ctx.isPointInStroke(path, x, y)) {
+        return element;
+      }
+    }
+  }
+  return null; // no match
 }
 function wbElementIdSet() {
   return (userId ? `${userId}` : 'initiator') + '-' + (wb.element.counter + 1 < Number.MAX_SAFE_INTEGER ? wb.element.counter++ : wb.element.counter = 0);
@@ -4723,7 +4939,7 @@ function wbElementHoverGetIndex(x, y) {
       break;
     }
   }
-  const hoveredLine = wbLineGetAtPosition(x, y); // Try to select a line
+  const hoveredLine = wbElementAtPositionGet(x, y); // Try to select a line
   if (hoveredLine) {
     for (let i = wb.elements.length - 1; 0 <= i; --i) {
       if (hoveredLine.id === wb.elements[i]?.id && 'line' === wb.elements[i].type) {
@@ -4743,6 +4959,9 @@ function wbElementIndexCreate(elements, stackId) {
   return elementIndex;
 }
 function wbElementMissing(elementId, elementsMissing) {
+  if (dataChannel.receive.partnerIdByIncomingId.has(elementId)) { // Skip because a partner is already sending this element
+    return;
+  }
   const partnerIds = wb.element.missing.partnerIds.get(elementId);
   if (!isArray(partnerIds)) {
     return;
@@ -5027,18 +5246,20 @@ function wbElementValid(element) {
 }
 function wbEventListenerAdd() {
   wb.whiteboard.addEventListener('contextmenu', wbOnContextMenu);
-  wb.whiteboard.addEventListener('mousedown', wbOnMouseDown);
+  wb.whiteboard.addEventListener('mousedown', wbOnMouseDown, {passive: false});
   wb.whiteboard.addEventListener('mouseout', wbOnMouseOut);
-  wb.whiteboard.addEventListener('mouseup', wbOnMouseUp);
+  wb.whiteboard.addEventListener('mouseup', wbOnMouseUp, {passive: false});
+  wb.whiteboard.addEventListener('pointerdown', wbOnPointerDown);
   wb.whiteboard.addEventListener('pointermove', wbOnPointerMove, {passive: false});
-  wb.whiteboard.addEventListener('touchend', wbOnMouseUp);
-  wb.whiteboard.addEventListener('touchstart', wbOnMouseDown);
+  wb.whiteboard.addEventListener('touchend', wbOnMouseUp, {passive: false});
+  wb.whiteboard.addEventListener('touchstart', wbOnMouseDown, {passive: false});
 }
 function wbEventListenerRemove() {
   wb.whiteboard.removeEventListener('contextmenu', wbOnContextMenu);
   wb.whiteboard.removeEventListener('mousedown', wbOnMouseDown);
   wb.whiteboard.removeEventListener('mouseout', wbOnMouseOut);
   wb.whiteboard.removeEventListener('mouseup', wbOnMouseUp);
+  wb.whiteboard.removeEventListener('pointerdown', wbOnPointerDown);
   wb.whiteboard.removeEventListener('pointermove', wbOnPointerMove);
   wb.whiteboard.removeEventListener('touchend', wbOnMouseUp);
   wb.whiteboard.removeEventListener('touchstart', wbOnMouseDown);
@@ -5046,7 +5267,7 @@ function wbEventListenerRemove() {
 function wbFinishCurrentJob() {
   wb.whiteboard.dispatchEvent(new Event('mouseup'));
 }
-function wbImageAdd(leftPx, name, notificationId, srcBase64, topPx) {
+function wbImageAdd(name, notificationId, srcBase64) {
   const id = wbElementIdSet();
   const img = new Image();
   img.onerror = function() {
@@ -5065,13 +5286,13 @@ function wbImageAdd(leftPx, name, notificationId, srcBase64, topPx) {
       name,
       type: 'image',
       width: defaultWidthPx,
-      x: leftPx,
-      y: topPx,
+      x: wb.images.defaultLeft - wb.camera.x,
+      y: wb.images.defaultTop - wb.camera.y,
     };
     wb.images.img.set(id, img);
     wb.elements.push(newImage);
     wbStateSave({elementId: id});
-    wbRedraw();
+    wbDraw();
     document.getElementById(notificationId)?.remove();
   };
   img.src = srcBase64;
@@ -5100,11 +5321,6 @@ function wbInsertImageConvert(event, files) {
       isLastFile && wbInsertReset(event);
       continue;
     }
-    if (files[i].size > bytesPerMessageAllowed) {
-      notificationsShow(i18n('fileSizeIsTooBig', {name}));
-      isLastFile && wbInsertReset(event);
-      continue;
-    }
     const notificationId = notificationsShow(i18n('fileNameIsConverting', {name: files[i].name}), true);
     const reader = new FileReader();
     reader.onloadend = (function(i) {
@@ -5116,13 +5332,7 @@ function wbInsertImageConvert(event, files) {
           isLastFile && wbInsertReset(event);
           return;
         }
-        if (srcBase64.length > bytesPerMessageAllowed) {
-          document.getElementById(notificationId)?.remove();
-          notificationsShow(i18n('fileSizeIsTooBig', {name}));
-          isLastFile && wbInsertReset(event);
-          return;
-        }
-        wbImageAdd(wb.images.defaultLeft, name, notificationId, srcBase64, wb.images.defaultTop, false);
+        wbImageAdd(name, notificationId, srcBase64);
         isLastFile && wbInsertReset(event);
       };
     })(i);
@@ -5148,11 +5358,6 @@ function wbInsertPDFConvert(event, files, notificationId) {
       isLastFile && wbInsertReset(event);
       continue;
     }
-    if (files[i].size > bytesPerMessageAllowed) {
-      notificationsShow(i18n('fileSizeIsTooBig', {name}));
-      isLastFile && wbInsertReset(event);
-      continue;
-    }
     const notificationId = notificationsShow(i18n('fileNameIsConverting', {name: files[i].name}), true);
     const reader = new FileReader();
     reader.onloadend = (function(i) {
@@ -5165,13 +5370,7 @@ function wbInsertPDFConvert(event, files, notificationId) {
           isLastFile && wbInsertReset(event);
           return;
         }
-        if (srcBase64.length > bytesPerMessageAllowed) {
-          document.getElementById(notificationId)?.remove();
-          notificationsShow(i18n('fileSizeIsTooBig', {name}));
-          isLastFile && wbInsertReset(event);
-          return;
-        }
-        wbInsertPDFToImage(wb.images.defaultLeft, name, notificationId, srcBase64, wb.images.defaultTop);
+        wbInsertPDFToImage(name, notificationId, srcBase64);
         isLastFile && wbInsertReset(event);
       };
     })(i);
@@ -5203,7 +5402,7 @@ function wbInsertPDFInputOnChange(event) {
   }
   wbInsertPDFConvert(event, files);
 }
-async function wbInsertPDFToImage(leftPx, name, notificationId, srcBase64, topPx) {
+async function wbInsertPDFToImage(name, notificationId, srcBase64) {
   pdfjsLib.GlobalWorkerOptions.workerSrc = '/js/pdf.worker.mjs';
   const pdfData = atob(srcBase64.substring(28));
   const uint8ArrayPdf = new Uint8Array(pdfData.length);
@@ -5223,7 +5422,7 @@ async function wbInsertPDFToImage(leftPx, name, notificationId, srcBase64, topPx
   canvas.height = viewport.height;
   canvas.width = viewport.width;
   await page.render({canvasContext, viewport}).promise;
-  wbImageAdd(leftPx, name, notificationId, canvas.toDataURL('image/png'), topPx, false);
+  wbImageAdd(name, notificationId, canvas.toDataURL('image/png'));
 }
 function wbInsertReset(event) {
   // Reset input value to allow re-upload of same file
@@ -5241,9 +5440,9 @@ function wbInsertTextInput(newText) {
   textarea.style.color = newText.color;
   textarea.style.fontFamily = newText.family;
   textarea.style.fontSize = `${newText.size}px`;
-  textarea.style.left = `${newText.x + (wb.whiteboard.getBoundingClientRect().left ?? 0) + (window.scrollX || window.pageXOffset)}px`;
+  textarea.style.left = `${newText.x + (wb.whiteboard.getBoundingClientRect().left ?? 0) + (window.scrollX || window.pageXOffset) + wb.camera.x}px`;
   textarea.style.padding = `${wb.textPadding}px`;
-  textarea.style.top = `${newText.y + (wb.whiteboard.getBoundingClientRect().top ?? 0) + (window.scrollY || window.pageYOffset)}px`;
+  textarea.style.top = `${newText.y + (wb.whiteboard.getBoundingClientRect().top ?? 0) + (window.scrollY || window.pageYOffset) + wb.camera.y}px`;
   textarea.style.width = `${newText.width}px`;
   textarea.value = newText.value;
   wb.outer?.appendChild(textarea);
@@ -5258,7 +5457,7 @@ function wbInsertTextInput(newText) {
           event.target?.remove();
           newText.display = true;
           wbStateSave();
-          wbRedraw();
+          wbDraw();
         }
         break;
       }
@@ -5285,74 +5484,8 @@ function wbInsertTextInput(newText) {
     wb.whiteboard.dispatchEvent(new CustomEvent('mouseup', event));
   });
 }
-function wbLineDrawGetEventPosition(event) {
-  if (event.touches?.length) {
-    const whiteboardRect = wb.whiteboard.getBoundingClientRect();
-    return {
-      x: event.touches[0].clientX - whiteboardRect.left,
-      y: event.touches[0].clientY - whiteboardRect.top,
-    };
-  } else {
-    return {
-      x: event.offsetX,
-      y: event.offsetY,
-    };
-  }
-}
-function wbLineGetAtPosition(x, y) {
-  for (let i = wb.elements.length - 1; 0 <= i; --i) {
-    const element = wb.elements[i];
-    if (['image', 'text'].includes(element?.type)) {
-      if (x >= element.x && x <= element.x + element.width
-      && y >= element.y && y <= element.y + element.height) {
-        return null;
-      }
-    } else if ('line' === element?.type) {
-      if (!isNumber(element.dx) || !isNumber(element.dy)) {
-        continue;
-      }
-      const reference = wb.lines.pointsReferences.get(element.id);
-      if (!isString(reference)) {
-        continue;
-      }
-      const basePoints = wb.lines.points.get(reference);
-      if (!isArray(basePoints) || !basePoints.length) {
-        continue;
-      }
-      const points = [...basePoints].map(pt => ({
-        x: pt.x + element.dx,
-        y: pt.y + element.dy,
-      }));
-      // Special case: single point (dot)
-      if (1 === points.length) {
-        const p = points[0];
-        const dx = x - p.x;
-        const dy = y - p.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        const hitRadius = element.width / 2;
-        if (distance <= hitRadius) {
-          return element;
-        }
-        continue;
-      }
-      // Multiple points: normal polyline
-      const path = new Path2D();
-      path.reset?.(); // Optional: needed in some cases to clear Path2D (experimental)
-      path.moveTo(points[0].x, points[0].y);
-      for (let j = 1; j < points.length; ++j) {
-        path.lineTo(points[j].x, points[j].y);
-      }
-      wb.ctx.lineWidth = element.width;
-      wb.ctx.strokeStyle = element.color;
-      if (wb.ctx.isPointInStroke(path, x, y)) {
-        return element;
-      }
-    }
-  }
-  return null; // no match
-}
 function wbLinePassiveStop(partnerId) {
-  wb.currentLinePassive.delete(partnerId);
+  wb.lines.currentPassive.delete(partnerId);
 }
 function wbLinePointsSave(elementId, points) {
   // Check whether points exist already
@@ -5367,17 +5500,17 @@ function wbLinePointsSave(elementId, points) {
   wb.lines.pointsReferences.set(elementId, elementId);
 }
 function wbLinePush() {
-  if (wb.currentLine.length) {
+  if (wb.lines.current.length) {
     const id = wbElementIdSet();
     wb.elements.push({
       color: wb.draw.color,
-      dx: 0,
-      dy: 0,
+      dx: 0 - wb.camera.x,
+      dy: 0 - wb.camera.y,
       id,
       type: 'line',
       width: wb.draw.width,
     });
-    wbLinePointsSave(id, [...wb.currentLine]);
+    wbLinePointsSave(id, [...wb.lines.current]);
   }
 }
 function wbModeChange(mode) {
@@ -5388,12 +5521,20 @@ function wbModeChange(mode) {
     nav.draw.pencil?.classList.add('navActiveButton')
     nav.insert.text?.classList.remove('navActiveButton');
     pencilTitle = i18n('deactivatePencil');
+    wb.control.grab.classList.remove('activeButton');
   } else if ('edit' === mode) {
     nav.draw.pencil?.classList.remove('navActiveButton');
     nav.insert.text?.classList.remove('navActiveButton');
+    wb.control.grab.classList.remove('activeButton');
+  } else if ('grab' === mode) {
+    nav.draw.pencil?.classList.remove('navActiveButton');
+    nav.insert.text?.classList.remove('navActiveButton');
+    wb.control.grab.classList.add('activeButton');
+    whiteboardCursor = 'url("' + png.grab + '") 10 10, grab';
   } else if ('textAdd' === mode) {
     nav.draw.pencil?.classList.remove('navActiveButton');
     nav.insert.text?.classList.add('navActiveButton');
+    wb.control.grab.classList.remove('activeButton');
     whiteboardCursor = 'text';
   }
   nav.draw.pencil?.setAttribute('aria-label', pencilTitle);
@@ -5404,8 +5545,9 @@ function wbOnContextMenu(event) {
   event.preventDefault();
   wbContextMenuRemove(event);
   navActiveOptionsClose();
-  const {x, y} = wbLineDrawGetEventPosition(event);
-  const index = wbElementHoverGetIndex(x, y);
+  const screen = wbPositionScreenGet(event);
+  const world = wbPositionWorldGet(screen.x, screen.y);
+  const index = wbElementHoverGetIndex(world.x, world.y);
   if (0 > index) {
     return;
   }
@@ -5451,8 +5593,10 @@ function wbOnMouseDown(event) {
     return;
   }
   'touchstart' === event.type && event.preventDefault();
+  wbContextMenuRemove(event);
   let redraw = false;
-  const {x, y} = wbLineDrawGetEventPosition(event);
+  const screen = wbPositionScreenGet(event);
+  const world = wbPositionWorldGet(screen.x, screen.y);
   // Deselect any previously selected element
   wb.selected && (redraw = true);
   const selectedIdOld = wb.selected?.id;
@@ -5461,9 +5605,9 @@ function wbOnMouseDown(event) {
   if ('default' === wb.mode) {
     wb.mode = 'lineDrawing';
     this.style.cursor = 'crosshair';
-    wb.currentLine = [{x, y}];
+    wb.lines.current = [{x: screen.x, y: screen.y}];
     wb.ctx.beginPath();
-    wb.ctx.arc(x, y, wb.draw.width / 2, 0, Math.PI * 2);
+    wb.ctx.arc(screen.x, screen.y, wb.draw.width / 2, 0, Math.PI * 2);
     wb.ctx.fillStyle = wb.draw.color;
     wb.ctx.fill();
     dataChannelSend({
@@ -5472,25 +5616,25 @@ function wbOnMouseDown(event) {
       fillStyle: wb.ctx.fillStyle,
       lineWidth: wb.ctx.lineWidth,
       strokeStyle: wb.ctx.strokeStyle,
-      x,
-      y,
+      x: world.x,
+      y: world.y,
     });
-  // Handle dragging/resizing/selecting existing elements
+  // Handle dragging/resizing existing elements
   } else if ('edit' === wb.mode) {
     // Check for text resizing handles first (if a text is already selected)
     if (false) {
       const handles = wbCursorResizeGet(wb.selected);
       for (const corner in handles) {
         const handle = handles[corner];
-        if (Math.abs(x - handle.x) < 10 && Math.abs(y - handle.y) < 10) {
+        if (Math.abs(world.x - handle.x) < 10 && Math.abs(world.y - handle.y) < 10) {
           wb.mode = 'textResizing';
           wb.textResizeCorner = corner;
-          redraw && wbRedraw();
+          redraw && wbDraw();
           return;
         }
       }
     }
-    const index = wbElementHoverGetIndex(x, y);
+    const index = wbElementHoverGetIndex(world.x, world.y);
     if (0 <= index && wb.elements[index]) {
       const element = wb.elements[index];
       if (element.isLocked) {
@@ -5501,7 +5645,7 @@ function wbOnMouseDown(event) {
         let isCorner = false;
         for (const corner in handles) {
           const handle = handles[corner];
-          if (Math.abs(x - handle.x) < 10 && Math.abs(y - handle.y) < 10) {
+          if (Math.abs(world.x - handle.x) < 10 && Math.abs(world.y - handle.y) < 10) {
             isCorner = true;
             wb.mode = 'imageResizing';
             wb.images.resizeCorner = corner;
@@ -5510,10 +5654,10 @@ function wbOnMouseDown(event) {
           }
         }
         if (!isCorner
-        && x >= element.x && x <= element.x + element.width
-        && y >= element.y && y <= element.y + element.height) {
-          wb.images.offsetX = x - element.x;
-          wb.images.offsetY = y - element.y;
+        && world.x >= element.x && world.x <= element.x + element.width
+        && world.y >= element.y && world.y <= element.y + element.height) {
+          wb.images.offsetX = world.x - element.x;
+          wb.images.offsetY = world.y - element.y;
           wb.mode = 'imageDragging';
           wb.selected = element;
           this.style.cursor = 'move';
@@ -5522,28 +5666,34 @@ function wbOnMouseDown(event) {
         wb.dragStart = {
           dx: element.dx,
           dy: element.dy,
-          mouseX: x,
-          mouseY: y,
+          mouseX: world.x,
+          mouseY: world.y,
         };
         wb.mode = 'lineDragging';
         wb.selected = element;
         return;
       } else if ('text' === element.type) {
-        if (x >= element.x && x <= element.x + element.width
-        && y >= element.y && y <= element.y + element.height) {
+        if (world.x >= element.x && world.x <= element.x + element.width
+        && world.y >= element.y && world.y <= element.y + element.height) {
           wb.selected = element;
           // Start dragging the text field if no resizing
-          wb.textInitialX = x;
-          wb.textInitialY = y;
+          wb.textInitialX = world.x;
+          wb.textInitialY = world.y;
           wb.isTextDragged = false;
           wb.mode = 'textDragging';
-          wb.textOffsetX = x - element.x;
-          wb.textOffsetY = y - element.y;
-          wb.whiteboard.style.cursor = 'move';
+          wb.textOffsetX = world.x - element.x;
+          wb.textOffsetY = world.y - element.y;
+          this.style.cursor = 'move';
           event.stopPropagation(); // Prevent canvas dragging if text is clicked
         }
       }
     }
+  // Change camera of whiteboard
+  } else if ('grab' === wb.mode) {
+    this.style.cursor = generalSVGToCursor(svg.grabbing, 10, 10) + ', grabbing';
+    wb.camera.startX = screen.x - wb.camera.x;
+    wb.camera.startY = screen.y - wb.camera.y;
+    wb.isPanning = true;
   // Add textarea element
   } else if ('textAdd' === wb.mode) {
     nav.insert.text?.classList.remove('navActiveButton');
@@ -5561,21 +5711,23 @@ function wbOnMouseDown(event) {
     document.body.appendChild(dummy);
     const height = parseFloat(dummy.getBoundingClientRect().height);
     dummy.remove();
-    const newText = new WhiteboardText(true, wbElementIdSet(), x, y, width, height, '', wb.text.size.current, wb.text.family, wb.text.color, 1);
+    const newText = new WhiteboardText(true, wbElementIdSet(), world.x, world.y, width, height, '', wb.text.size.current, wb.text.family, wb.text.color, 1);
     wb.elements.push(newText);
     wb.selected = newText; // Select the newly created text
     wbInsertTextInput(newText);
-    redraw && wbRedraw();
+    redraw && wbDraw();
     return;
   }
   selectedIdOld !== wb.selected?.id && (redraw = true);
-  redraw && wbRedraw();
+  redraw && wbDraw();
 }
 function wbOnMouseOut(event) {
   wbOut();
 }
 function wbOnMouseUp(event) {
   'touchend' === event.type && event.preventDefault();
+  clearTimeout(wb.pointerDown.timeout);
+  wb.pointerDown.timeout = null;
   if (event.isTrusted && 0 !== event.button && 'mouse' === event.pointerType) {
     return;
   }
@@ -5596,7 +5748,7 @@ function wbOnMouseUp(event) {
           const newText = new WhiteboardText(false, wb.elements[i].id, wb.elements[i].x, wb.elements[i].y, wb.elements[i].width, wb.elements[i].height, wb.elements[i].value, wb.elements[i].size, wb.elements[i].family, wb.elements[i].color, wb.elements[i].rows);
           wb.elements[i] = newText;
           wb.selected = newText;
-          wbRedraw();
+          wbDraw();
           wbInsertTextInput(newText);
           document.getElementById(newText.id)?.focus();
           break;
@@ -5606,26 +5758,45 @@ function wbOnMouseUp(event) {
       wb.isTextDragged = false;
     }
   }
+  const selectedId = wb.selected?.id;
   wbUp();
+  if ('touchend' === event.type && isString(selectedId)) {
+    wb.selected = null;
+    wbDraw();
+  }
+}
+function wbOnPointerDown(event) {
+  if (!['pen', 'touch'].includes(event.pointerType)) {
+    return;
+  }
+  clearTimeout(wb.pointerDown.timeout);
+  wb.pointerDown.timeout = setTimeout(() => {
+    wbOnContextMenu(event);
+    wb.whiteboard.dispatchEvent(new Event('touchend'));
+  }, wb.pointerDown.duration);
 }
 function wbOnPointerMove(event) {
   'touch' === event.pointerType && event.preventDefault();
-  const {x, y} = wbLineDrawGetEventPosition(event);
+  clearTimeout(wb.pointerDown.timeout);
+  wb.pointerDown.timeout = null;
+  const screen = wbPositionScreenGet(event);
+  const world = wbPositionWorldGet(screen.x, screen.y);
   const currentElement = 'touch' === event.pointerType ? document.elementFromPoint(event.clientX, event.clientY) : event.target;
   if ('whiteboard' === currentElement?.id) {
     dataChannelSend({
       area: 'whiteboard',
       command: 'cursorPosition',
-      x,
-      y,
+      x: world.x,
+      y: world.y,
     });
     wb.partnerCursorOffSent = false;
   }
   let cursorSet = false;
   let redraw = false;
   if ('edit' === wb.mode) {
-    const index = wbElementHoverGetIndex(x, y);
+    const index = wbElementHoverGetIndex(world.x, world.y);
     if (0 <= index && wb.elements[index]) {
+      wb.isHover = true;
       const element = wb.elements[index];
       const isLocked = element.isLocked;
       isString(element.id) && (wb.selected = element);
@@ -5637,82 +5808,14 @@ function wbOnPointerMove(event) {
         const handles = wbCursorResizeGet(element);
         for (const corner in handles) {
           const handle = handles[corner];
-          if (Math.abs(x - handle.x) < 10 && Math.abs(y - handle.y) < 10) {
+          if (Math.abs(world.x - handle.x) < 10 && Math.abs(world.y - handle.y) < 10) {
             this.style.cursor = corner + '-resize';
             cursorSet = true;
             break;
           }
         }
       }
-      wb.ctx.clearRect(0, 0, wb.whiteboard.width, wb.whiteboard.height);
-      for (let i = 0; i < wb.elements.length; ++i) {
-        wb.ctx.save(); // save current styles
-        if (index === i) { // highlight hovered element
-          wb.isHover = true;
-          wb.ctx.shadowBlur = 8; // glow size
-          wb.ctx.shadowColor = 'red';
-        } else {
-          wb.ctx.shadowBlur = 0; // no shadow for other elements
-        }
-        if ('image' === wb.elements[i]?.type) {
-          const img = wb.images.img.get(wb.elements[i].id);
-          img && wb.ctx.drawImage(img, wb.elements[i].x, wb.elements[i].y, wb.elements[i].width, wb.elements[i].height);
-        } else if ('line' === wb.elements[i]?.type) {
-          if (!isNumber(wb.elements[i].dx) || !isNumber(wb.elements[i].dy)) {
-            continue;
-          }
-          const reference = wb.lines.pointsReferences.get(wb.elements[i].id);
-          if (!isString(reference)) {
-            continue;
-          }
-          const basePoints = wb.lines.points.get(reference);
-          if (!isArray(basePoints) || !basePoints.length) {
-            continue;
-          }
-          const points = [...basePoints].map(pt => ({
-            x: pt.x + wb.elements[i].dx,
-            y: pt.y + wb.elements[i].dy,
-          }));
-          wb.ctx.setLineDash([]);
-          wb.ctx.beginPath();
-          if (1 < points.length) { // line
-            wb.ctx.lineCap = 'round';
-            wb.ctx.lineJoin = 'round';
-            wb.ctx.lineWidth = wb.elements[i].width;
-            wb.ctx.strokeStyle = wb.elements[i].color || 'black';
-            wb.ctx.moveTo(points[0].x, points[0].y);
-            for (let p = 1; p < points.length; ++p) {
-              wb.ctx.lineTo(points[p].x, points[p].y);
-            }
-            wb.ctx.stroke();
-          } else { // dot
-            wb.ctx.fillStyle = wb.elements[i].color || 'black';
-            wb.ctx.arc(points[0].x, points[0].y, wb.elements[i].width / 2, 0, Math.PI * 2);
-            wb.ctx.fill();
-          }
-        } else if ('text' === wb.elements[i]?.type) {
-          const text = wb.elements[i];
-          if (!text.display) {
-            continue;
-          }
-          // Only draw on canvas if it's not the currently active editing input
-          const activeInput = document.querySelector(`.wbTextInput[data-text-id="${text.id}"]`);
-          if (activeInput && document.activeElement === activeInput) {
-            continue; // Skip drawing if the HTML input is active
-          }
-          wb.ctx.font = `${text.size}px ${text.family}`;
-          wb.ctx.fillStyle = text.color;
-          wb.ctx.textBaseline = 'top'; // Align text to the top of the bounding box
-          const lines = text.value.split('\n'); // Handle multi-line text
-          let currentY = text.y + wb.textPadding; // Add padding
-          for (const line of lines) {
-            wb.ctx.fillText(line, text.x + wb.textPadding, currentY + 3); // Add padding
-            currentY += text.size * wb.lineHeightMultiplier; // Adjust line height
-          }
-        }
-        wb.ctx.restore(); // restore previous styles
-      }
-      // Set cursor based on what's hovered
+      redraw = true;
       if (!cursorSet) {
         this.style.cursor = 'move';
         cursorSet = true;
@@ -5723,10 +5826,17 @@ function wbOnPointerMove(event) {
         wb.isHover = false;
       }
     }
+  // Change camera of whiteboard
+  } else if ('grab' === wb.mode) {
+    if (wb.isPanning) {
+      redraw = true;
+      wb.camera.x = screen.x - wb.camera.startX;
+      wb.camera.y = screen.y - wb.camera.startY;
+    }
   // Existing image dragging
   } else if ('imageDragging' === wb.mode && wb.selected) {
-    wb.selected.x = x - wb.images.offsetX;
-    wb.selected.y = y - wb.images.offsetY;
+    wb.selected.x = world.x - wb.images.offsetX;
+    wb.selected.y = world.y - wb.images.offsetY;
     redraw = true;
     dataChannelSend({
       area: 'whiteboard',
@@ -5743,23 +5853,23 @@ function wbOnPointerMove(event) {
     const iy = wb.selected.y;
     switch (wb.images.resizeCorner) {
       case 'ne':
-        wb.selected.height = Math.max(wb.images.minSize, ih + (iy - y));
-        wb.selected.width = Math.max(wb.images.minSize, x - ix);
+        wb.selected.height = Math.max(wb.images.minSize, ih + (iy - world.y));
+        wb.selected.width = Math.max(wb.images.minSize, world.x - ix);
         wb.selected.y = iy + ih - wb.selected.height;
         break;
       case 'nw':
-        wb.selected.height = Math.max(wb.images.minSize, ih + (iy - y));
-        wb.selected.width = Math.max(wb.images.minSize, iw + (ix - x));
-        wb.selected.x = x;
+        wb.selected.height = Math.max(wb.images.minSize, ih + (iy - world.y));
+        wb.selected.width = Math.max(wb.images.minSize, iw + (ix - world.x));
+        wb.selected.x = world.x;
         wb.selected.y = iy + ih - wb.selected.height;
         break;
       case 'se':
-        wb.selected.height = Math.max(wb.images.minSize, y - iy);
-        wb.selected.width = Math.max(wb.images.minSize, x - ix);
+        wb.selected.height = Math.max(wb.images.minSize, world.y - iy);
+        wb.selected.width = Math.max(wb.images.minSize, world.x - ix);
         break;
       case 'sw':
-        wb.selected.height = Math.max(wb.images.minSize, y - iy);
-        wb.selected.width = Math.max(wb.images.minSize, iw + (ix - x));
+        wb.selected.height = Math.max(wb.images.minSize, world.y - iy);
+        wb.selected.width = Math.max(wb.images.minSize, iw + (ix - world.x));
         wb.selected.x = ix + iw - wb.selected.width;
         break;
     }
@@ -5777,8 +5887,8 @@ function wbOnPointerMove(event) {
   } else if ('lineDragging' === wb.mode) {
     if (wb.selected) {
       if (wb.selected && wb.dragStart) {
-        wb.selected.dx = wb.dragStart.dx + (x - wb.dragStart.mouseX);
-        wb.selected.dy = wb.dragStart.dy + (y - wb.dragStart.mouseY);
+        wb.selected.dx = wb.dragStart.dx + (world.x - wb.dragStart.mouseX);
+        wb.selected.dy = wb.dragStart.dy + (world.y - wb.dragStart.mouseY);
       }
       redraw = true;
       dataChannelSend({
@@ -5791,15 +5901,15 @@ function wbOnPointerMove(event) {
     }
   // Existing line drawing
   } else if ('lineDrawing' === wb.mode) {
-    const point = { x, y };
-    wb.currentLine.push(point);
+    const point = {x: screen.x, y: screen.y};
+    wb.lines.current.push(point);
     wb.ctx.lineCap = 'round';
     wb.ctx.lineJoin = 'round';
     wb.ctx.lineWidth = wb.draw.width;
     wb.ctx.shadowBlur = 0;
     wb.ctx.strokeStyle = wb.draw.color;
     wb.ctx.beginPath();
-    const last = wb.currentLine[wb.currentLine.length - 2];
+    const last = wb.lines.current[wb.lines.current.length - 2];
     if (last) {
       wb.ctx.moveTo(last.x, last.y);
       wb.ctx.lineTo(point.x, point.y);
@@ -5811,16 +5921,16 @@ function wbOnPointerMove(event) {
       fillStyle: wb.ctx.fillStyle,
       lineWidth: wb.ctx.lineWidth,
       strokeStyle: wb.ctx.strokeStyle,
-      x,
-      y,
+      x: world.x,
+      y: world.y,
     });
   // Handle text dragging
   } else if ('textDragging' === wb.mode) {
     if (wb.selected) {
-      if (x !== wb.textInitialX || y !== wb.textInitialY) {
+      if (world.x !== wb.textInitialX || world.y !== wb.textInitialY) {
         wb.isTextDragged = true;
-        wb.selected.x = x - wb.textOffsetX;
-        wb.selected.y = y - wb.textOffsetY;
+        wb.selected.x = world.x - wb.textOffsetX;
+        wb.selected.y = world.y - wb.textOffsetY;
         redraw = true;
         dataChannelSend({
           area: 'whiteboard',
@@ -5841,23 +5951,23 @@ function wbOnPointerMove(event) {
       const th = wb.selected.height;
       switch (wb.textResizeCorner) {
         case 'ne':
-          wb.selected.height = Math.max(minSize, th + (ty - y));
-          wb.selected.width = Math.max(minSize, x - tx);
-          wb.selected.y = ty + th - wb.selected.height; // Adjust y if resizing from top
+          wb.selected.height = Math.max(minSize, th + (ty - world.y));
+          wb.selected.width = Math.max(minSize, world.x - tx);
+          wb.selected.y = ty + th - wb.selected.height; // Adjust world.y if resizing from top
           break;
         case 'nw':
-          wb.selected.height = Math.max(minSize, th + (ty - y));
-          wb.selected.width = Math.max(minSize, tw + (tx - x));
-          wb.selected.x = x;
+          wb.selected.height = Math.max(minSize, th + (ty - world.y));
+          wb.selected.width = Math.max(minSize, tw + (tx - world.x));
+          wb.selected.x = world.x;
           wb.selected.y = ty + th - wb.selected.height;
           break;
         case 'se':
-          wb.selected.height = Math.max(minSize, y - ty);
-          wb.selected.width = Math.max(minSize, x - tx);
+          wb.selected.height = Math.max(minSize, world.y - ty);
+          wb.selected.width = Math.max(minSize, world.x - tx);
           break;
         case 'sw':
-          wb.selected.height = Math.max(minSize, y - ty);
-          wb.selected.width = Math.max(minSize, tw + (tx - x));
+          wb.selected.height = Math.max(minSize, world.y - ty);
+          wb.selected.width = Math.max(minSize, tw + (tx - world.x));
           wb.selected.x = tx + tw - wb.selected.width; // Adjust x if resizing from left
           break;
       }
@@ -5881,100 +5991,40 @@ function wbOnPointerMove(event) {
       });
     }
   }
-  if (!cursorSet && !['imageDragging', 'imageResizing', 'lineDrawing', 'textAdd', 'textDragging', 'textResizing'].includes(wb.mode)) {
+  if (!cursorSet && !['grab', 'imageDragging', 'imageResizing', 'lineDrawing', 'textAdd', 'textDragging', 'textResizing'].includes(wb.mode)) {
     this.style.cursor = 'default';
   }
-  redraw && wbRedraw();
+  redraw && wbDraw();
 }
 function wbOut() {
   const redraw = wbDeselect();
   'lineDrawing' === wb.mode && wbLinePush();
-  !wbUp() && redraw && wbRedraw();
+  !wbUp() && redraw && wbDraw();
+  wbPartnerCursorOffSend();
 }
-function wbRedraw() {
-  if (!wb.ctx || !wb.whiteboard) {
-    notificationsShow(i18n('whiteboardNotFound'));
-    return;
-  }
-  wb.ctx.clearRect(0, 0, wb.whiteboard.width, wb.whiteboard.height);
-  for (let i = 0; i < wb.elements.length; ++i) {
-    wb.ctx.save(); // save current styles
-    if (!wb.elements[i]) {
-      continue;
-    }
-    if (wb.selected?.id === wb.elements[i].id
-    && ['edit', 'imageDragging', 'imageResizing', 'lineDragging', 'textDragging', 'textResizing'].includes(wb.mode)) {
-      wb.ctx.shadowBlur = 8; // glow size
-      wb.ctx.shadowColor = 'red';
-    } else {
-      wb.ctx.shadowBlur = 0; // no shadow for other elements
-    }
-    if ('image' === wb.elements[i].type) {
-      const image = wb.elements[i];
-      const img = wb.images.img.get(image.id);
-      img && wb.ctx.drawImage(img, image.x, image.y, image.width, image.height);
-    } else if ('line' === wb.elements[i].type) {
-      const line = wb.elements[i];
-      if (!isNumber(line.dx) || !isNumber(line.dy)) {
-        continue;
-      }
-      const reference = wb.lines.pointsReferences.get(line.id);
-      if (!isString(reference)) {
-        continue;
-      }
-      const basePoints = wb.lines.points.get(reference);
-      if (!isArray(basePoints) || !basePoints.length) {
-        continue;
-      }
-      const points = [...basePoints].map(pt => ({
-        x: pt.x + line.dx,
-        y: pt.y + line.dy,
-      }));
-      wb.ctx.lineCap = 'round';
-      wb.ctx.lineJoin = 'round';
-      wb.ctx.lineWidth = line.width;
-      wb.ctx.strokeStyle = line.color;
-      wb.ctx.beginPath();
-      wb.ctx.moveTo(points[0].x, points[0].y);
-      for (let i = 1 === points.length ? 0 : 1; i < points.length; ++i) {
-        wb.ctx.lineTo(points[i].x, points[i].y);
-      }
-      wb.ctx.stroke();
-    } else if ('text' === wb.elements[i].type) {
-      const text = wb.elements[i];
-      if (!text.display) {
-        continue;
-      }
-      // Only draw on canvas if it's not the currently active editing input
-      const activeInput = document.querySelector(`.wbTextInput[data-text-id="${text.id}"]`);
-      if (activeInput && document.activeElement === activeInput) {
-        continue; // Skip drawing if the HTML input is active
-      }
-      wb.ctx.font = `${text.size}px ${text.family}`;
-      wb.ctx.fillStyle = text.color;
-      wb.ctx.textBaseline = 'top'; // Align text to the top of the bounding box
-      const lines = text.value.split('\n'); // Handle multi-line text
-      let currentY = text.y + wb.textPadding; // Add padding
-      for (const line of lines) {
-        wb.ctx.fillText(line, text.x + wb.textPadding, currentY + 3); // Add padding
-        currentY += text.size * wb.lineHeightMultiplier; // Adjust line height
-      }
-    }
-    wb.ctx.restore(); // restore previous styles
+function wbPartnerCursorOffSend() {
+  if (!wb.partnerCursorOffSent) {
+    dataChannelSend({
+      area: 'whiteboard',
+      command: 'cursorPositionOff',
+    });
+    wb.partnerCursorOffSent = true;
   }
 }
-function wbRedrawCheck(elementIds) {
-  const elements = wbStackCurrentGet()?.elements;
-  if (!isArray(elements)) {
-    return;
-  }
-  const ids = new Set(elementIds);
-  for (const element of elements) {
-    if (ids.has(element?.id)) {
-      wbStateLoad(elements);
-      return;
-    }
-  }
+function wbPositionScreenGet(event) {
+  const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+  const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+  const whiteboardRect = wb.whiteboard.getBoundingClientRect();
+  return {
+    x: clientX - whiteboardRect.left,
+    y: clientY - whiteboardRect.top
+  };
+}
+function wbPositionWorldGet(x, y) {
+  return {
+    x: x - wb.camera.x,
+    y: y - wb.camera.y
+  };
 }
 function wbResizeHandlesGet(image) {
   return {
@@ -6090,13 +6140,13 @@ function wbStackRegister(stack) {
   return stack;
 }
 function wbStackUndoChanged(params) {
-  const index = parseInt(document.getElementById('wbContextMenu')?.getAttribute('data-elements-index'));
+  const index = parseInt(document.getElementById('wbContextMenu')?.getAttribute('data-elements-index'), 10);
   if (isInt(index)) {
     wb.elements[index + 1] ? document.getElementById('wbContextMenuLayerUp')?.removeAttribute('disabled') : document.getElementById('wbContextMenuLayerUp')?.setAttribute('disabled', 'disabled');
     wb.elements[index - 1] ? document.getElementById('wbContextMenuLayerDown')?.removeAttribute('disabled') : document.getElementById('wbContextMenuLayerDown')?.setAttribute('disabled', 'disabled');
   }
-  wb.control?.back && (wb.control.back.disabled = 2 > wb.stack.undo.length);
-  wb.control?.forward && (wb.control.forward.disabled = !wb.stack.redo.length);
+  wb.controlOld.back.disabled = 2 > wb.stack.undo.length;
+  wb.controlOld.forward.disabled = !wb.stack.redo.length;
   if (!params?.noStateSend) {
     wb.stack.changed = wbStartTimeDifferenceGet();
     wbStateSend(params?.stackCopy);
@@ -6115,6 +6165,16 @@ function wbStartTimeDifferenceGet() {
   return Date.now() - performance.timing.navigationStart + serverTime;
 }
 function wbStateCompare(news, partnerId) {
+  // Handle incomingId to avoid multiple downloads of the same element
+  if (isString(news.incomingId) && '' !== news.incomingId
+  && !dataChannel.receive.partnerIdByIncomingId.has(news.incomingId)) {
+    const incomingIds = dataChannel.receive.incomingIdsByPartnerId.get(partnerId) || new Set();
+    if (!incomingIds.has(news.incomingId)) {
+      incomingIds.add(news.incomingId);
+      dataChannel.receive.incomingIdsByPartnerId.set(partnerId, incomingIds);
+    }
+    dataChannel.receive.partnerIdByIncomingId.set(news.incomingId, partnerId);
+  }
   const isAlpha = !isAlphaUser(partnerId);
   // Prepare clean local copies
   const newRedo = wb.stack.redo.filter(item => item?.id && !wb.stack.deleted.includes(item.id));
@@ -6137,12 +6197,12 @@ function wbStateCompare(news, partnerId) {
       return false;
     }
     if (shouldMoveToTarget) {
-      // MOVE: keep same object, preserve identity
+      // Move to another stack
       collection.splice(index, 1);
       existing.modified = item.modified;
       targetCollection.push(existing);
     } else {
-      // UPDATE ONLY
+      // Update only
       existing.modified = item.modified;
     }
     stateChanged = true;
@@ -6152,8 +6212,8 @@ function wbStateCompare(news, partnerId) {
   for (const pItem of news.stackRedo) {
     const {id, modified} = pItem;
     if (!isString(id)
-     || wb.stack.deleted.includes(id)
-     || !isInt(modified) || 0 > modified) {
+    || wb.stack.deleted.includes(id)
+    || !isInt(modified) || 0 > modified) {
       continue;
     }
     const inRedo = myRedoIds.has(id);
@@ -6337,7 +6397,7 @@ function wbStateLoad(elements, stackId) {
       }
       return {...element}; // line + text
     });
-    wbRedraw();
+    wbDraw();
   }
   // Abort dragging and resizing if related element disappeared
   if (['imageDragging', 'imageResizing', 'lineDragging', 'textDragging', 'textResizing'].includes(wb.mode)) {
@@ -6350,7 +6410,7 @@ function wbStateLoad(elements, stackId) {
     }
     if (!found) {
       wbModeChange('edit');
-      wbDeselect() && wbRedraw();
+      wbDeselect() && wbDraw();
     }
   }
 }
@@ -6381,10 +6441,34 @@ function wbStateSend(stackNew) {
     stackChanged: wb.stack.changed,
     stackDeleted: wb.stack.deleted,
   };
-  stackNew && (message.stackNew = stackNew);
+  let imageId = '';
+  let imageSrc = '';
+  if (stackNew) {
+    if (isArray(stackNew.elements)) {
+      for (let i = stackNew.elements.length - 1; 0 <= i; --i) {
+        if ('image' === stackNew.elements[i].type
+        && isString(stackNew.elements[i].src)) {
+          imageId = message.incomingId = stackNew.elements[i].id;
+          imageSrc = stackNew.elements[i].src;
+          delete stackNew.elements[i].src;
+          break;
+        }
+      }
+    }
+    message.stackNew = stackNew;
+  }
   message.stackRedo = wb.stack.redo.map(({id, modified}) => ({id, modified}));
   message.stackUndo = wb.stack.undo.slice(1).map(({id, modified}) => ({id, modified}));
   userId && dataChannelSendLargeMessage(message);
+  if (userId && imageId && imageSrc) {
+    dataChannelSendLargeMessage({
+      area: 'whiteboard',
+      command: 'elementsProperty',
+      type: 'image',
+      ids: [imageId],
+      src: imageSrc,
+    });
+  }
   wb.stateSend.timeout = setTimeout(wbStateSend, wb.stateSend.delay);
 }
 function wbTextMap(text) {
@@ -6410,11 +6494,13 @@ function wbUp() {
   let redrawn = false;
   wb.dragStart = wb.images.resizeCorner = wb.selected = wb.textInitialX = wb.textInitialY = wb.textResizeCorner = null;
   wb.draggingOffset = {...wbDefault.draggingOffset};
-  if (['imageDragging', 'imageResizing', 'lineDragging', 'textDragging', 'textResizing'].includes(wb.mode)) {
+  wb.isPanning = false;
+  if ('grab' === wb.mode) {
+    wb.whiteboard.style.cursor = 'url("' + png.grab + '") 10 10, grab';
+  } else if (['imageDragging', 'imageResizing', 'lineDragging', 'textDragging', 'textResizing'].includes(wb.mode)) {
     const modeOld = wb.mode;
     wbModeChange('edit');
-    if ('lineDragging' === modeOld
-    && isString(selectedId)) {
+    if ('lineDragging' === modeOld && isString(selectedId)) {
       wbStateSave({elementId: selectedId});
     } else {
       wbStateSave();
@@ -6428,7 +6514,7 @@ function wbUp() {
     } else {
       wbStateSave();
     }
-    wbRedraw();
+    wbDraw();
   }
   return redrawn;
 }
@@ -6742,13 +6828,17 @@ wbStackUndoReset();
   }
   fonts.sort((a, b) => a.localeCompare(b, 'en', {sensitivity: 'base'}));
   nav.text.family.classList.add('family' + fonts[0].replaceAll(' ', ''));
-  nav.text.family.textContent = wb.text.family = fonts[0];
+  const span = document.createElement('span');
+  span.textContent = fonts[0];
+  nav.text.family.textContent = '';
+  nav.text.family.appendChild(span);
+  wb.text.family = fonts[0];
   navTextSizeFamily();
   const elements = wbStackCurrentGet()?.elements;
   if (isArray(elements)) {
     for (let i = 0; i < elements.length; ++i) {
       if ('text' === elements[i].type) {
-        wbRedraw();
+        wbDraw();
         break;
       }
     }
@@ -6769,15 +6859,19 @@ window.addEventListener('load', wbStateInitialise);
 window.addEventListener('popstate', uiPopState);
 window.addEventListener('resize', windowOnResize);
 // Start
-window.dispatchEvent(new CustomEvent('popstate', {detail: {keepVideo: true}}));
-videoRemotePlace();
-if (wb.outer) {
-  wbStackUndoChanged({noStateSend: true});
-  const hasNone = wb.outer.classList.contains('none');
-  hasNone && wb.outer.classList.remove('none');
-  const whiteboardRect = wb.whiteboard.getBoundingClientRect();
-  hasNone && wb.outer.classList.add('none');
-  wb.whiteboard.height = whiteboardRect.height;
-  wb.whiteboard.width = whiteboardRect.width;
-}
-resizeObserver.observe(wb.whiteboard);
+const wbPlaceHolder = new Image();
+wbPlaceHolder.onload = () => {
+  window.dispatchEvent(new CustomEvent('popstate', {detail: {keepVideo: true}}));
+  videoRemotePlace();
+  if (wb.outer) {
+    wbStackUndoChanged({noStateSend: true});
+    const hasNone = wb.outer.classList.contains('none');
+    hasNone && wb.outer.classList.remove('none');
+    const whiteboardRect = wb.whiteboard.getBoundingClientRect();
+    hasNone && wb.outer.classList.add('none');
+    wb.whiteboard.height = whiteboardRect.height;
+    wb.whiteboard.width = whiteboardRect.width;
+  }
+  resizeObserver.observe(wb.whiteboard);
+};
+wbPlaceHolder.src = wb.placeHolderSrc;
