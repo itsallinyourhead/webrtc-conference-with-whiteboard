@@ -1337,8 +1337,8 @@ async function dataChannelOnMessage(event, partnerId) {
       || !wb.whiteboard) {
         return;
       }
-      wb.partnerCursor.style.left = news.x + 'px';
-      wb.partnerCursor.style.top = news.y + 'px';
+      wb.partnerCursor.style.left = (news.x  + wb.camera.x) + 'px';
+      wb.partnerCursor.style.top = (news.y + wb.camera.y) + 'px';
       wb.partnerCursor.classList.remove('none');
     } else if ('cursorPositionOff' === news.command) {
       wb.partnerCursor.classList.add('none');
@@ -1351,8 +1351,8 @@ async function dataChannelOnMessage(event, partnerId) {
         return;
       }
       const lineOld = wb.lines.currentPassive.get(partnerId) || [];
-      const x = news.x - wb.camera.x;
-      const y = news.y - wb.camera.y;
+      const x = news.x + wb.camera.x;
+      const y = news.y + wb.camera.y;
       wb.lines.currentPassive.set(partnerId, [...lineOld, {x, y}]);
       wb.ctx.lineCap = 'round'; // smooth line ends
       wb.ctx.lineJoin = 'round'; // smooth joints
@@ -1360,28 +1360,25 @@ async function dataChannelOnMessage(event, partnerId) {
       wb.ctx.shadowBlur = 0;
       wb.ctx.strokeStyle = wb.draw.colorPassive = news.strokeStyle;
       wb.ctx.beginPath();
-      const last = lineOld[lineOld.length - 1];
+      const last = lineOld[lineOld.length - 2];
       if (last) {
         wb.ctx.moveTo(last.x, last.y);
-        wb.ctx.lineTo(news.x, news.y);
+        wb.ctx.lineTo(x, y);
         wb.ctx.stroke();
       }
     } else if ('drawStart' === news.command) {
       if (!isString(news.fillStyle)
       || !isNumber(news.lineWidth) || 0 > news.lineWidth
-      || !isString(news.strokeStyle)
       || !isNumber(news.x)
       || !isNumber(news.y)) {
         return;
       }
-      const x = news.x - wb.camera.x;
-      const y = news.y - wb.camera.y;
+      const x = news.x + wb.camera.x;
+      const y = news.y + wb.camera.y;
       wb.lines.currentPassive.set(partnerId, [{x, y}]);
-      wb.draw.widthPassive = news.lineWidth;
       wb.ctx.beginPath();
-      wb.ctx.arc(x, y, wb.draw.widthPassive / 2, 0, Math.PI * 2);
-      wb.ctx.fillStyle = wb.draw.colorPassive = news.strokeStyle;
-      wb.ctx.shadowBlur = 0;
+      wb.ctx.arc(x, y, news.lineWidth / 2, 0, Math.PI * 2);
+      wb.ctx.fillStyle = wb.draw.colorPassive = news.fillStyle;
       wb.ctx.fill();
     } else if ('imageDragging' === news.command) {
       if (!isString(news.id)
@@ -5613,9 +5610,8 @@ function wbOnMouseDown(event) {
     dataChannelSend({
       area: 'whiteboard',
       command: 'drawStart',
-      fillStyle: wb.ctx.fillStyle,
-      lineWidth: wb.ctx.lineWidth,
-      strokeStyle: wb.ctx.strokeStyle,
+      fillStyle: wb.draw.color,
+      lineWidth: wb.draw.width,
       x: world.x,
       y: world.y,
     });
@@ -6023,7 +6019,7 @@ function wbPositionScreenGet(event) {
 function wbPositionWorldGet(x, y) {
   return {
     x: x - wb.camera.x,
-    y: y - wb.camera.y
+    y: y - wb.camera.y,
   };
 }
 function wbResizeHandlesGet(image) {
