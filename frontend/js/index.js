@@ -389,7 +389,7 @@ const internationalisation = {
   },
 };
 let isInitiator = false;
-let localCameraStream = null; // local camera mirrored for videoLocal + picture in picture
+let localCameraStream = null;
 let localStream = null; // sent to peers
 const microphone = {
   local: {
@@ -581,6 +581,7 @@ const video = {
   local: {
     frameRate: 30,
     marginBottom: 5,
+    playing: false,
     transitionDuration: .2,
   },
   recording: {
@@ -1655,8 +1656,8 @@ function documentOnClick(event) {
     navOptionsVideoRecordingThumbnailOnClick(event);
   }
 }
-function documentOnMouseOut(event) {
-  null === event.relatedTarget && wbOut();
+function documentOnMouseLeave(event) {
+  wbOut();
 }
 function galleryCloseOnClick(event) {
   nav.activeOptions.keep = false;
@@ -3810,8 +3811,8 @@ function rtcHandleTrackEventCombineMedia(partnerId) {
     at && combined.addTrack(at);
   }
   if (videoStream) {
-    const vt = videoStream.getVideoTracks()[0];
-    vt && combined.addTrack(vt);
+    const videoTrack = videoStream.getVideoTracks()[0];
+    videoTrack && combined.addTrack(videoTrack);
   }
   if (combined.getVideoTracks().length) {
     videoRemote.srcObject = combined;
@@ -3831,13 +3832,12 @@ async function rtcLocalAcquire() {
   rtc.media.isAcquiring = true;
   try {
     await rtcLocalMediaGet();
-    if (camera.local.on
-    && videoLocal
-    && videoLocalHasVideo()) {
+    if (camera.local.on && videoLocalHasVideo()) {
       videoLocal.srcObject = localCameraStream;
-      await videoLocal.play().catch(() => {});
+      videoLocal.play().catch(() => {});
+    } else {
+      videoLocalTransition();
     }
-    videoLocalTransition();
     await rtcLocalAcquireMediaAndAddTracks();
   } finally {
     rtc.media.isAcquiring = false;
@@ -3845,7 +3845,6 @@ async function rtcLocalAcquire() {
 }
 async function rtcLocalAcquireMediaAndAddTracks() {
   try {
-    const hasLocalMedia = localStream?.getVideoTracks().length;
     for (const [partnerId, pc] of rtc.peerConnections) {
       // Add new tracks in order: audio -> video (camera or screen)
       const audioTrack = localStream?.getAudioTracks()[0];
@@ -3880,27 +3879,22 @@ async function rtcLocalAcquireMediaAndAddTracks() {
       }
     }
     // Polling
-    camera.local.on && !hasLocalMedia
-      ? rtcMediaPollingStart()
-      : rtcMediaPollingStop();
+    camera.local.on ? rtcMediaPollingStart() : rtcMediaPollingStop();
     return true;
   } catch (error) {
     console.error('[MEDIA-ACQ] Failed:', error);
-    camera.local.on && !shareScreen.local.on
-      ? rtcMediaPollingStart()
-      : rtcMediaPollingStop();
+    camera.local.on && !shareScreen.local.on ? rtcMediaPollingStart() : rtcMediaPollingStop();
     return false;
   }
 }
 async function rtcLocalMediaGet() {
+  const audioConstraints = microphone.local.on
+    ? (microphone.local.deviceId ? {deviceId: {exact: microphone.local.deviceId}} : true)
+    : false;
   try {
     if (!camera.local.on && !microphone.local.on) {
-      //console.log('[GETMEDIA] Both camera and microphone are disabled. Returning empty MediaStream.');
-      return new MediaStream();
+      return;
     }
-    const audioConstraints = microphone.local.on
-      ? (microphone.local.deviceId ? {deviceId: {exact: microphone.local.deviceId}} : true)
-      : false;
     const videoConstraints = camera.local.on
       ? (camera.local.deviceId ? {deviceId: {exact: camera.local.deviceId}, frameRate: {ideal: video.local.frameRate}} : true)
       : false;
@@ -3923,18 +3917,24 @@ async function rtcLocalMediaGet() {
       }
     }
     // Store original stream for sending and local video
-    localStream = localCameraStream = originalStream;
-  } catch (error) {
+    localCameraStream = localStream = originalStream;
+  } catch (error) { 
     if (camera.local.on && ['AbortError', 'NotFoundError', 'NotReadableError'].includes(error.name)) {
-      const reason = {AbortError: 'Camera failed', NotFoundError: 'No camera', NotReadableError: 'Camera in use'}[error.name];
-      console.warn(`[GETMEDIA] ${reason}, trying audio only.`);
+      if (error.toString().includes('Starting videoinput failed')) { // if videoLocal is stalled (Firefox)
+        !video.local.playing && videoLocalPause();
+      }
       if (microphone.local.on) {
+        const reason = {AbortError: 'Camera failed', NotFoundError: 'No camera', NotReadableError: 'Camera in use'}[error.name];
+        //console.warn(`[GETMEDIA] ${reason}, trying audio only.`);
         try {
-          const audioStream = await navigator.mediaDevices.getUserMedia({audio: true, video: false});
+          const audioStream = await navigator.mediaDevices.getUserMedia({
+            audio: audioConstraints,
+            video: false,
+          });
           localCameraStream = localStream = audioStream;
-          return audioStream;
-        } catch (e) {
-          throw e;
+          return;
+        } catch (error2) {
+          throw error2;
         }
       }
     } else if ('NotAllowedError' === error.name) {
@@ -4092,8 +4092,8 @@ function rtcMediaPollingStart() {
   }
   const poll = async () => {
     try {
-      //console.log(`[POLLING] Check: stream=${!!localCameraStream}, video=${hasVideoTrack}, audio=${videoLocalHasAudio()}`);
-      if (!localCameraStream || (camera.local.on && !videoLocalHasVideo())) {
+      //console.log(`[POLLING] Check: stream=${!!localCameraStream}, video=${videoLocalHasVideo()}, audio=${videoLocalHasAudio()}`);
+      if (!localCameraStream || (camera.local.on && !video.local.playing)) {
         //console.log('[POLLING] Acquiring media...');
         await rtcLocalAcquire();
       } else {
@@ -4414,16 +4414,31 @@ async function videoLocalListOnChange(event) {
   window[event.target.getAttribute('data-device')].local.deviceId = event.target.value;
   await rtcLocalAcquire();
 }
+function videoLocalMirrorEnd() {
+  if (isFunction(camera.local.mirrored.cleanUp)) {
+    camera.local.mirrored.cleanUp();
+    camera.local.mirrored.cleanUp = null;
+  }
+}
 async function videoLocalMicrophoneOnClick(event) {
   event.target.blur();
   microphone.local.on = event.target.checked;
   !microphone.local.on && localStream?.getAudioTracks().forEach(t => t.stop());
   await rtcLocalAcquire();
 }
-function videoLocalMirrorEnd() {
-  if (isFunction(camera.local.mirrored.cleanUp)) {
-    camera.local.mirrored.cleanUp();
-    camera.local.mirrored.cleanUp = null;
+function videoLocalOnLoadedData(event) {
+  video.local.playing = true;
+  videoLocalTransition();
+}
+function videoLocalOnPause(event) {
+  video.local.playing = false;
+}
+function videoLocalOnTransitionEnd(event) {
+  if (!videoLocalOuter.offsetHeight) {
+    video.local.playing = false;
+    videoLocalPause();
+    videoEndLocalStream(true);
+    document.getElementById(this.getAttribute('data-style-id'))?.remove();
   }
 }
 function videoLocalOuterHeightMaxGet() {
@@ -4436,6 +4451,14 @@ function videoLocalOuterHeightMaxGet() {
   }
   heightMax += video.local.marginBottom;
   return heightMax;
+}
+function videoLocalPause() {
+  videoLocal.pause();
+  if (videoLocal.srcObject) {
+    const tracks = videoLocal.srcObject?.getTracks();
+    tracks.forEach(track => track.stop());
+    videoLocal.srcObject = null;
+  }
 }
 function videoLocalTransition() {
   let heightMax = 0;
@@ -4467,12 +4490,6 @@ function videoLocalTransition() {
   videoLocalOuter.style.height = heightEnd + 'px';
   videoLocalOuter.offsetHeight; // Force reflow to ensure new properties are applied
   videoLocalOuter.addEventListener('transitionend', videoLocalOnTransitionEnd, {once: true});
-}
-function videoLocalOnTransitionEnd(event) {
-  if (!videoLocalOuter.offsetHeight) {
-    videoEndLocalStream(true);
-    document.getElementById(this.getAttribute('data-style-id'))?.remove();
-  }
 }
 function videoRemoteMicrophoneOnOnClick(event) {
   event.target.blur();
@@ -4670,7 +4687,15 @@ function wbContextMenuLockOnClick(event) {
   wbContextMenuRemove(event);
   wbStateSave();
 }
-function wbContextMenuOnMouseOut(event) {
+function wbContextMenuOnMouseLeave(event) {
+  if (isString(wb.selected?.id)) { // do not deselect and reselect the same wb element
+    const screen = wbPositionScreenGet(event);
+    const world = wbPositionWorldGet(screen.x, screen.y);
+    const index = wbElementHoverGetIndex(world.x, world.y);
+    if (isInt(index) && wb.selected.id === wb.elements[index]?.id) {
+      return;
+    }
+  }
   wbDeselect() && wbDraw();
 }
 function wbContextMenuOnWheel(event) {
@@ -4883,7 +4908,7 @@ function wbElementAtPositionGet(x, y) {
       }
       // Multiple points: normal polyline
       const path = new Path2D();
-      path.reset?.(); // Optional: needed in some cases to clear Path2D (experimental)
+      path.reset?.(); // Optional: needed in some cases to clear Path2D
       path.moveTo(points[0].x, points[0].y);
       for (let j = 1; j < points.length; ++j) {
         path.lineTo(points[j].x, points[j].y);
@@ -5244,7 +5269,7 @@ function wbElementValid(element) {
 function wbEventListenerAdd() {
   wb.whiteboard.addEventListener('contextmenu', wbOnContextMenu);
   wb.whiteboard.addEventListener('mousedown', wbOnMouseDown, {passive: false});
-  wb.whiteboard.addEventListener('mouseout', wbOnMouseOut);
+  wb.whiteboard.addEventListener('mouseleave', wbOnMouseLeave);
   wb.whiteboard.addEventListener('mouseup', wbOnMouseUp, {passive: false});
   wb.whiteboard.addEventListener('pointerdown', wbOnPointerDown);
   wb.whiteboard.addEventListener('pointermove', wbOnPointerMove, {passive: false});
@@ -5254,7 +5279,7 @@ function wbEventListenerAdd() {
 function wbEventListenerRemove() {
   wb.whiteboard.removeEventListener('contextmenu', wbOnContextMenu);
   wb.whiteboard.removeEventListener('mousedown', wbOnMouseDown);
-  wb.whiteboard.removeEventListener('mouseout', wbOnMouseOut);
+  wb.whiteboard.removeEventListener('mouseleave', wbOnMouseLeave);
   wb.whiteboard.removeEventListener('mouseup', wbOnMouseUp);
   wb.whiteboard.removeEventListener('pointerdown', wbOnPointerDown);
   wb.whiteboard.removeEventListener('pointermove', wbOnPointerMove);
@@ -5549,7 +5574,7 @@ function wbOnContextMenu(event) {
     return;
   }
   const contextMenu = document.createElement('div');
-  contextMenu.addEventListener('mouseout', wbContextMenuOnMouseOut);
+  contextMenu.addEventListener('mouseleave', wbContextMenuOnMouseLeave);
   contextMenu.addEventListener('pointermove', wbContextMenuOnPointerMove);
   contextMenu.addEventListener('wheel', wbContextMenuOnWheel);
   contextMenu.classList.add('hidden');
@@ -5586,7 +5611,7 @@ function wbOnContextMenu(event) {
   contextMenu.classList.remove('hidden');
 }
 function wbOnMouseDown(event) {
-  if (event.isTrusted && 0 !== event.button && 'mouse' === event.pointerType) {
+  if (event.isTrusted && 0 !== event.button && 'mousedown' === event.type) {
     return;
   }
   'touchstart' === event.type && event.preventDefault();
@@ -5717,14 +5742,17 @@ function wbOnMouseDown(event) {
   selectedIdOld !== wb.selected?.id && (redraw = true);
   redraw && wbDraw();
 }
-function wbOnMouseOut(event) {
+function wbOnMouseLeave(event) {
+  if (wb.contextMenu.id === event.relatedTarget?.parentElement?.id) {
+    return;
+  }
   wbOut();
 }
 function wbOnMouseUp(event) {
   'touchend' === event.type && event.preventDefault();
   clearTimeout(wb.pointerDown.timeout);
   wb.pointerDown.timeout = null;
-  if (event.isTrusted && 0 !== event.button && 'mouse' === event.pointerType) {
+  if (event.isTrusted && 0 !== event.button && 'mouseup' === event.type) {
     return;
   }
   if ('lineDrawing' === wb.mode) {
@@ -6804,9 +6832,9 @@ wbStackUndoReset();
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
   const fontsDecode = [
+    '16px Caveat',
     '16px Dancing Script',
     '16px Dosis',
-    '16px Indie Flower',
     '16px Pacifico',
     '16px Poppins',
   ];
@@ -6843,7 +6871,7 @@ wbStackUndoReset();
 // Assign event listeners
 document.getElementById('chatAll')?.addEventListener('transitionend', chatAllOnTransitionEnd);
 document.addEventListener('click', documentOnClick);
-document.addEventListener('mouseout', documentOnMouseOut);
+document.addEventListener('mouseleave', documentOnMouseLeave);
 document.getElementById('navInsertImageInput')?.addEventListener('change', wbInsertImageInputOnChange);
 document.getElementById('navInsertPDFInput')?.addEventListener('change', wbInsertPDFInputOnChange);
 wbEventListenerAdd();
@@ -6851,6 +6879,8 @@ chat.new?.addEventListener('focus', chatNewOnFocus);
 chat.new?.addEventListener('input', chatNewOnInput);
 chat.new?.addEventListener('keydown', chatNewOnKeyDown);
 modal.outer?.addEventListener('close', modalOuterOnClose);
+videoLocal.addEventListener('loadeddata', videoLocalOnLoadedData);
+videoLocal.addEventListener('pause', videoLocalOnPause);
 window.addEventListener('load', wbStateInitialise);
 window.addEventListener('popstate', uiPopState);
 window.addEventListener('resize', windowOnResize);
