@@ -1,5 +1,12 @@
 @font-face {
   font-display: block;
+  font-family: Caveat;
+  font-style: normal;
+  font-weight: 400;
+  src: url('/fonts/Caveat-Regular.woff2') format('woff2');
+}
+@font-face {
+  font-display: block;
   font-family: 'Dancing Script';
   font-style: normal;
   font-weight: 400;
@@ -11,13 +18,6 @@
   font-style: normal;
   font-weight: 400;
   src: url('/fonts/Dosis-Regular.woff2') format('woff2');
-}
-@font-face {
-  font-display: block;
-  font-family: 'Indie Flower';
-  font-style: normal;
-  font-weight: 400;
-  src: url('/fonts/IndieFlower-Regular.woff2') format('woff2');
 }
 @font-face {
   font-display: block;
@@ -169,6 +169,9 @@ button > * {
 .familyArial {
   font-family: arial;
 }
+.familyCaveat {
+  font-family: caveat, arial;
+}
 .familyCursive {
   font-family: cursive, arial;
 }
@@ -177,9 +180,6 @@ button > * {
 }
 .familyDosis {
   font-family: dosis, arial;
-}
-.familyIndieFlower {
-  font-family: 'indie flower', arial;
 }
 .familyMonospace {
   font-family: monospace, arial;
@@ -1192,6 +1192,7 @@ textarea {
 #wbContextMenu {
   background-color: rgb(0, 0, 0, .6);
   border-radius: 12px;
+  overflow: hidden;
   position: absolute;
   width: 230px;
   z-index: 15;
